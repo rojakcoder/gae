@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,10 +15,12 @@ import (
 	"google.golang.org/appengine/log"
 )
 
-// HEADER_ERROR is the header for holding error description. This is in all
-// lower-case because it is following the specifications and App Engine
-// changes it to all lowercase no matter the original casing.
 const (
+	// HEADER_CURSOR is the header for holding the pagination cursor.
+	HEADER_CURSOR = "x-cursor"
+	// HEADER_ERROR is the header for holding error description. This is in all
+	// lower-case because it is following the specifications and App Engine
+	// changes it to all lowercase no matter the original casing.
 	HEADER_ERROR = "x-error"
 )
 
@@ -81,26 +85,58 @@ func (this *DateTime) UnmarshalJSON(input []byte) error {
 
 // EntityNotFoundError is for Datastore retrieval not finding the entity.
 type EntityNotFoundError struct {
-	kind string
-	err  error
+	Kind string
+	Err  error
 }
 
 // Error for EntityNotFoundError returns a string in the format:
 //  <kind> entity not found: <error string>
 func (this EntityNotFoundError) Error() string {
-	return this.kind + " entity not found: " + this.err.Error()
+	e := "entity not found"
+	if this.Kind != "" {
+		e = this.Kind + " entity not found"
+	}
+	if this.Err != nil {
+		e += ": " + this.Err.Error()
+	}
+	return e
 }
 
 // JSONUnmarshalError is for unmarshalling errors when reading request JSON
 // payload.
+//
+// The Msg field should provide an indication of where the error originated
+// from. E.g. CreateSchoolAPI - request body
 type JSONUnmarshalError struct {
-	error
+	Msg string
+	Err error
 }
 
 // Error for JSONUnmarshalError returns a string in the format:
-//  Unable to parse JSON: <error string>
+//  unable to parse JSON (<msg>): <error string>
 func (this JSONUnmarshalError) Error() string {
-	return "Unable to parse JSON: " + this.Error()
+	e := "unable to parse JSON"
+	if this.Msg != "" {
+		e += " (" + this.Msg + ")"
+	}
+	if this.Err != nil {
+		e += ": " + this.Err.Error()
+	}
+	return e
+}
+
+// MissingError is for missing parameter values.
+//
+// The Msg field should provide a brief description of the parameter whose
+// value is missing.
+type MissingError struct {
+	Msg string
+}
+
+// Error for MissingError returns a string in the format:
+//	missing value: <msg>
+func (this MissingError) Error() string {
+	return "missing value: " + this.Msg
 }
 
 // Page describes the contents for a page. It is to be used with templates.
@@ -113,13 +149,13 @@ type Page struct {
 
 // ValidityError is for errors in model validation.
 type ValidityError struct {
-	message string
+	Msg string
 }
 
 // Error for ValidityError returns a string in the format:
 //	Validation error: <error string>
 func (this ValidityError) Error() string {
-	return "Validation error: " + this.message
+	return "validation error: " + this.Msg
 }
 
 // Model is an interface that all application models must implement
@@ -178,6 +214,23 @@ func LoadByKey(ctx context.Context, k *datastore.Key, m Model) error {
 	return nil
 }
 
+// PrepPageParams parses the query parameters to get the pagination cursor and
+// count.
+//
+// The cursor should be specified as "cursor". If not specified, an empty
+// string is returned.
+//
+// The count should be specified as "ipp". Default value is 50.
+func PrepPageParams(params url.Values) (limit int, cursor string) {
+	ipp := params.Get("ipp")
+	cursor = params.Get("cursor")
+	limit = 50
+	if ipp != "" {
+		limit, _ = strconv.Atoi(ipp)
+	}
+	return
+}
+
 // ReadJSON reads a HTTP request body into an instance of Model. It assumes that
 // the body is a JSON string.
 //
@@ -222,23 +275,23 @@ func Save(ctx context.Context, m Model) error {
 // returned.
 func WriteJSON(w http.ResponseWriter, m Model, status int) {
 	if err := json.NewEncoder(w).Encode(m); err != nil {
-		WriteResponse(w, http.StatusInternalServerError, err)
+		WriteRespErr(w, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(status)
 }
 
-// WriteLogResponse logs the error string and then writes it to the response
+// WriteLogRespErr logs the error string and then writes it to the response
 // header (HEADER_ERROR) before setting the response code.
-func WriteLogResponse(c context.Context, w http.ResponseWriter, code int, e error) {
+func WriteLogRespErr(c context.Context, w http.ResponseWriter, code int, e error) {
 	log.Errorf(c, e.Error())
 	w.Header().Add(HEADER_ERROR, e.Error())
 	w.WriteHeader(code)
 }
 
-// WriteResponse writes the error string to the response header (HEADER_ERROR)
+// WriteRespErr writes the error string to the response header (HEADER_ERROR)
 // before setting the response code.
-func WriteResponse(w http.ResponseWriter, code int, e error) {
+func WriteRespErr(w http.ResponseWriter, code int, e error) {
 	w.Header().Set(http.CanonicalHeaderKey(HEADER_ERROR), e.Error())
 	w.WriteHeader(code)
 }
