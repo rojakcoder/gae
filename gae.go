@@ -25,16 +25,19 @@ const (
 )
 
 var (
-	// ErrMisMatch is returned when a PUT request specifies different values for
+	// ErrMismatch is returned when a PUT request specifies different values for
 	// the ID in the path parameter and the payload model.
-	ErrMisMatch = errors.New("Mismatched values")
+	ErrMismatch = errors.New("mismatched values")
 
 	// ErrMultipleEntities is returned when a Datastore retrieval
 	// finds more than 1 entity with the specified criteria.
-	ErrMultipleEntities = errors.New("Multiple entities retrieved when only 1 is expected")
+	ErrMultipleEntities = errors.New("multiple entities retrieved when only 1 is expected")
 
 	// ErrNilKey is returned by SetKey methods when the parameter is nil.
-	ErrNilKey = errors.New("Key is nil")
+	ErrNilKey = errors.New("key is nil")
+
+	// ErrMissingID is returned when a request does not provide an ID.
+	ErrMissingID = errors.New("expected ID not specified")
 
 	// ErrUnexpectedID is returned when a POST request includes the ID property in
 	// the payload model when it is not supposed to.
@@ -160,10 +163,22 @@ func (this ValidityError) Error() string {
 
 // Model is an interface that all application models must implement
 // in order to be able to save to and load from the Datastore
+//
+// The ID method is for converting a *datastore.Key field into a string.
+//
+// The MakeKey method is for getting the Key of the entity (if present) or
+// make a new one for saving (if absent).
+//
+// The SetKey method is used primarily to set the Key of the struct after
+// retrieving from/saving to the Datastore.
+//
+// ValidationError returns a slice of string with the fields that do not meet
+// the validation rules. This is used by IsValid to determine the validity of
+// the model.
 type Model interface {
-	IsValid() bool
+	ID() string
 	MakeKey(context.Context) *datastore.Key
-	SetKey(*datastore.Key) error
+	SetKey(*datastore.Key)
 	ValidationError() []string
 }
 
@@ -193,6 +208,14 @@ func DeleteByKey(ctx context.Context, k *datastore.Key) error {
 		return err
 	}
 	return nil
+}
+
+// IsValid checks if a model has satisfied its validation rules.
+func IsValid(m Model) bool {
+	if len(m.ValidationError()) > 0 {
+		return false
+	}
+	return true
 }
 
 // LoadByID retrieves a model from the Datastore using the opaque
@@ -231,19 +254,6 @@ func PrepPageParams(params url.Values) (limit int, cursor string) {
 	return
 }
 
-// ReadJSON reads a HTTP request body into an instance of Model. It assumes that
-// the body is a JSON string.
-//
-// structs that implement the Model interface should be done on the pointer
-func ReadJSON(r *http.Request, m Model) error {
-	dec := json.NewDecoder(r.Body)
-	//TODO verify if & can be omitted from below
-	if err := dec.Decode(&m); err != nil {
-		return err
-	}
-	return nil
-}
-
 // Save checks for validity of model m prior to saving to the Datastore.
 //
 // Save also invokes the Presave method of m if it is set to perform any
@@ -251,7 +261,7 @@ func ReadJSON(r *http.Request, m Model) error {
 //
 // After saving, the key is assigned to m.
 func Save(ctx context.Context, m Model) error {
-	if !m.IsValid() {
+	if IsValid(m) {
 		return ValidityError{strings.Join(m.ValidationError(), ", ")}
 	}
 	if presaver, ok := m.(Presaver); ok {
@@ -261,15 +271,16 @@ func Save(ctx context.Context, m Model) error {
 	if err != nil {
 		return err
 	}
-	if err = m.SetKey(key); err != nil {
-		return err
-	}
-
+	m.SetKey(key)
 	return nil
 }
 
 // WriteJSON writes an instance of Model as a JSON string into the response
 // body and sets the status code as specified.
+//
+// Due to the nature of the language, the slice of the implementing structs
+// cannot be passed to this function as-is - it needs to be changed into a
+// slice of Model explicity. E.g.
 //
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
@@ -278,6 +289,25 @@ func WriteJSON(w http.ResponseWriter, m Model, status int) {
 		WriteRespErr(w, http.StatusInternalServerError, err)
 		return
 	}
+	w.WriteHeader(status)
+}
+
+// WriteJSONColl writes a slice of Model instances as JSON string into the
+// response body and sets the status code as specified.
+//
+//	coll := make([]gae.Model, len(users))
+//	for k, v := range users {
+//		coll[k] = &v
+//	}
+//
+// If there is any error writing the JSON, a 500 Internal Server error is
+// returned.
+func WriteJSONColl(w http.ResponseWriter, m []Model, status int, cursor string) {
+	if err := json.NewEncoder(w).Encode(m); err != nil {
+		WriteRespErr(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.Header().Add(HEADER_CURSOR, cursor)
 	w.WriteHeader(status)
 }
 
