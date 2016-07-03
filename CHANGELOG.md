@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.3.0] - 2016-07-03
+
+### Removed
+- Removed the method SetKey from the Model interface.
+
 ## [0.2.0] - 2016-07-02
 
 ### Added

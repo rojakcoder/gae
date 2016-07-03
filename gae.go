@@ -169,16 +169,12 @@ func (this ValidityError) Error() string {
 // The MakeKey method is for getting the Key of the entity (if present) or
 // make a new one for saving (if absent).
 //
-// The SetKey method is used primarily to set the Key of the struct after
-// retrieving from/saving to the Datastore.
-//
 // ValidationError returns a slice of string with the fields that do not meet
 // the validation rules. This is used by IsValid to determine the validity of
 // the model.
 type Model interface {
 	ID() string
 	MakeKey(context.Context) *datastore.Key
-	SetKey(*datastore.Key)
 	ValidationError() []string
 }
 
