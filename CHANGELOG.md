@@ -1,5 +1,16 @@
 # Change Log
 
+## [0.4.0] - 2016-07-04
+
+### Added
+- Added a new error for type incompatability.
+- Added Update as a method for the Model interface.
+- Added getter and setter for the key field for Model.
+
+### Changed
+- Changed the ID method from the Model interface into a function - the
+rationale is that the code is identical for all the models.
+
 ## [0.3.0] - 2016-07-03
 
 ### Removed

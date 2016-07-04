@@ -42,6 +42,10 @@ var (
 	// ErrUnexpectedID is returned when a POST request includes the ID property in
 	// the payload model when it is not supposed to.
 	ErrUnexpectedID = errors.New("ID is specified when it is not expected")
+
+	// ErrWrongType is returned when the provided function argument is
+	// incompatible from what is expected.
+	ErrWrongType = errors.New("provided type is different from expected")
 )
 
 // DateTime is an auxillary struct for time.Time specifically for the purpose
@@ -173,9 +177,11 @@ func (this ValidityError) Error() string {
 // the validation rules. This is used by IsValid to determine the validity of
 // the model.
 type Model interface {
-	ID() string
+	Key() *datastore.Key
 	MakeKey(context.Context) *datastore.Key
+	SetKey(*datastore.Key) error
 	ValidationError() []string
+	Update(Model) error
 }
 
 // Presaver specifies a method Presave with no return values.
@@ -248,6 +254,17 @@ func PrepPageParams(params url.Values) (limit int, cursor string) {
 		limit, _ = strconv.Atoi(ipp)
 	}
 	return
+}
+
+// ReadID reads the model's Key and returns the Key in a base 64
+// representation.
+//
+// If the Key is nil, an empty string is returned.
+func ReadID(m Model) string {
+	if m.Key() == nil {
+		return ""
+	}
+	return m.Key().Encode()
 }
 
 // Save checks for validity of model m prior to saving to the Datastore.
