@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.5.0] - 2016-07-04
+
+### Added
+- Added a new generic error struct.
+
 ## [0.4.0] - 2016-07-04
 
 ### Added

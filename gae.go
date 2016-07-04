@@ -109,6 +109,19 @@ func (this EntityNotFoundError) Error() string {
 	return e
 }
 
+// InvalidError is a generic error for describing invalid conditions.
+//
+// An example is when the request parameter value is in an invalid format.
+type InvalidError struct {
+	Msg string
+}
+
+// Error for InvalidError returns a string in the format:
+//	invalid value: <msg>
+func (this InvalidError) Error() string {
+	return "invalid value: " + this.Msg
+}
+
 // JSONUnmarshalError is for unmarshalling errors when reading request JSON
 // payload.
 //
