@@ -1,5 +1,13 @@
 # Change Log
 
+## [0.5.1] - 2016-07-06
+
+### Added
+- Added more tests to validate the library.
+
+### Changed
+- Fixed a bug that causes Save to fail.
+
 ## [0.5.0] - 2016-07-04
 
 ### Added

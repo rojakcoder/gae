@@ -193,8 +193,8 @@ type Model interface {
 	Key() *datastore.Key
 	MakeKey(context.Context) *datastore.Key
 	SetKey(*datastore.Key) error
-	ValidationError() []string
 	Update(Model) error
+	ValidationError() []string
 }
 
 // Presaver specifies a method Presave with no return values.
@@ -287,7 +287,7 @@ func ReadID(m Model) string {
 //
 // After saving, the key is assigned to m.
 func Save(ctx context.Context, m Model) error {
-	if IsValid(m) {
+	if !IsValid(m) {
 		return ValidityError{strings.Join(m.ValidationError(), ", ")}
 	}
 	if presaver, ok := m.(Presaver); ok {
