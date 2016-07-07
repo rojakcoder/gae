@@ -2,14 +2,34 @@ package gae
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"golang.org/x/net/context"
+	"google.golang.org/appengine"
 	"google.golang.org/appengine/aetest"
 	"google.golang.org/appengine/datastore"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"testing"
 	"time"
 )
+
+type Dummy struct {
+	Codes map[int]int
+}
+
+func (this Dummy) Key() *datastore.Key { return nil }
+
+func (this Dummy) MakeKey(ctx context.Context) *datastore.Key {
+	return datastore.NewIncompleteKey(ctx, "Dummy", nil)
+}
+
+func (this Dummy) SetKey(key *datastore.Key) error { return nil }
+
+func (this Dummy) Update(m Model) error { return nil }
+
+func (this Dummy) ValidationError() []string { return make([]string, 0) }
 
 type Ointment struct {
 	KeyID  *datastore.Key `json:"id"`
@@ -27,6 +47,10 @@ func (this *Ointment) MakeKey(ctx context.Context) *datastore.Key {
 		this.KeyID = datastore.NewIncompleteKey(ctx, "Ointment", nil)
 	}
 	return this.KeyID
+}
+
+func (this *Ointment) Presave() {
+	this.Expiry = DateTime{this.Expiry.AddDate(0, -1, 0)}
 }
 
 func (this *Ointment) SetKey(key *datastore.Key) error {
@@ -101,7 +125,7 @@ func TestJSON(t *testing.T) {
 		t.Errorf("JSON Name is not empty. Expected %v, got %v\n", exp, js)
 	}
 
-	//paring of empty JSON
+	//parsing of empty JSON
 	var o1 Ointment
 	err = json.Unmarshal(j, &o1)
 
@@ -202,11 +226,23 @@ func TestSaveLoadDelete(t *testing.T) {
 		nil,
 		22,
 		DateTime{t2},
-		"Tiger",
+		"",
 	}
 
+	if err := Save(ctx, m2); err == nil {
+		t.Error("Expected validation error but none was encountered")
+	}
+
+	m2.Name = "Tiger"
+
+	expiry := m2.Expiry
 	if err := Save(ctx, m2); err != nil {
 		t.Error("Error saving to Datastore", err.Error())
+	}
+
+	//test Presave
+	if expiry.Equal(m2.Expiry) {
+		t.Error("Expiry field should be modified by Presave")
 	}
 
 	if m2.Key() == nil {
@@ -221,10 +257,18 @@ func TestSaveLoadDelete(t *testing.T) {
 		t.Error("Retrieved Ointment.Batch is different from saved")
 	}
 	if !o2.Expiry.Equal(m2.Expiry) {
+		//Presave reduces Expiry by 1 day
 		t.Error("Retrieved Ointment.Expiry is different from saved")
 	}
 	if o2.Name != m2.Name {
 		t.Error("Retrieved Ointment.Name is different from saved")
+	}
+
+	DeleteByID(ctx, ReadID(m2))
+
+	o3 := Ointment{}
+	if err := LoadByID(ctx, ReadID(m2), &o3); err == nil {
+		t.Error("Expected error from not finding entity. Should be deleted already")
 	}
 }
 
@@ -289,5 +333,239 @@ func TestDateTime(t *testing.T) {
 	re := regexp.MustCompile(ts3)
 	if !re.MatchString(string(j3)) {
 		t.Errorf("expected JSON time to be `%v` (with quotes); got %v", ts3, string(j3))
+	}
+}
+
+func TestCoverage(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+
+	//cover DateTime
+	jsTime := "ABC"
+	dt1 := new(DateTime)
+	if err := dt1.UnmarshalJSON(([]byte)(jsTime)); err == nil {
+		t.Error("failed to cover DateTime.UnmarshalJSON")
+	}
+
+	//cover DeleteByID
+	if err := DeleteByID(ctx, "invalid-key"); err == nil {
+		t.Error("expected DeleteByID to fail with invalid ID:", "invalid-key")
+	}
+
+	//cover LoadByID
+	if err := LoadByID(ctx, "invalid-key", &Ointment{}); err == nil {
+		t.Error("expected LoadByKey to fail with invalid ID:", "inavlid-key")
+	}
+
+	//cover ReadID
+	if ReadID(&Ointment{}) != "" {
+		t.Error("expected empty string for nil key")
+	}
+
+	//cover Save
+	if err := Save(ctx, Dummy{}); err == nil {
+		t.Error("expected error from saving Dummy")
+	}
+}
+
+func TestErrors(t *testing.T) {
+	//cover EntityNotFoundError
+	enfeTests := []struct {
+		e    error
+		want string
+	}{
+		{EntityNotFoundError{}, "entity not found"},
+		{EntityNotFoundError{Kind: "Assignment"}, "Assignment entity not found"},
+		{EntityNotFoundError{"Deadline", errors.New("overdue")}, "Deadline entity not found: overdue"},
+	}
+	for _, tt := range enfeTests {
+		if tt.e.Error() != tt.want {
+			t.Errorf("Error string for EntityNotFoundError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
+		}
+	}
+
+	//cover InvalidError
+	ieTests := []struct {
+		e    error
+		want string
+	}{
+		{InvalidError{}, "invalid value: "},
+		{InvalidError{"Currency expected"}, "invalid value: Currency expected"},
+	}
+	for _, tt := range ieTests {
+		if tt.e.Error() != tt.want {
+			t.Errorf("Error string for InvalidError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
+		}
+	}
+
+	//cover JSONMarshalError
+	jmeTests := []struct {
+		e    error
+		want string
+	}{
+		{JSONUnmarshalError{}, "unable to parse JSON"},
+		{JSONUnmarshalError{Msg: "empty string"}, "unable to parse JSON (empty string)"},
+		{JSONUnmarshalError{"numbers only", errors.New("Numbers only")}, "unable to parse JSON (numbers only): Numbers only"},
+	}
+	for _, tt := range jmeTests {
+		if tt.e.Error() != tt.want {
+			t.Errorf("Error string for JSONMarshalError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
+		}
+	}
+
+	//cover MissingError
+	meTests := []struct {
+		e    error
+		want string
+	}{
+		{MissingError{}, "missing value: "},
+		{MissingError{"key"}, "missing value: key"},
+	}
+	for _, tt := range meTests {
+		if tt.e.Error() != tt.want {
+			t.Errorf("Error string for MissingError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
+		}
+	}
+
+	//cover ValidityError
+	veTests := []struct {
+		e    error
+		want string
+	}{
+		{ValidityError{}, "validation error: "},
+		{ValidityError{"Name is required"}, "validation error: Name is required"},
+	}
+	for _, tt := range veTests {
+		if tt.e.Error() != tt.want {
+			t.Errorf("Error string for ValidityError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
+		}
+	}
+}
+
+func TestServerFuncs(t *testing.T) {
+	inst, err := aetest.NewInstance(nil)
+	if err != nil {
+		t.Fatalf("Failed to create instance: %v", err)
+	}
+	defer inst.Close()
+
+	path := "/"
+	r1, err := inst.NewRequest("GET", path, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request for %v: %v", path, err)
+	}
+
+	//test PrepPageParams
+	limit, cursor := PrepPageParams(r1.URL.Query())
+	if limit != 50 {
+		t.Errorf("expected default limit value 50; got %v", limit)
+	}
+	if cursor != "" {
+		t.Errorf("expected cursor to be empty; got %v", cursor)
+	}
+
+	path = "/?ipp=300&cursor=abc"
+	r2, err := inst.NewRequest("GET", path, nil)
+	if err != nil {
+		t.Fatalf("Failed to create request for %v: %v", path, err)
+	}
+
+	limit, cursor = PrepPageParams(r2.URL.Query())
+	if limit != 300 {
+		t.Errorf("expected specified limit value 300; got %v", limit)
+	}
+	if cursor != "abc" {
+		t.Errorf("expected cursor to be 'abc'; got %v", cursor)
+	}
+
+	//test WriteJSON
+	w := httptest.NewRecorder()
+	WriteJSON(w, &Ointment{}, http.StatusOK)
+	if w.Code != 200 {
+		t.Errorf("expected response code %v; got %v", 200, w.Code)
+	}
+	json := "{\"id\":null,\"batch\":0,\"Expiry\":\"\",\"Name\":\"\"}\n"
+	if string(w.Body.Bytes()) != json {
+		t.Errorf("expected JSON output:\n - %v\ngot:\n - %v", json, string(w.Body.Bytes()))
+	}
+
+	w = httptest.NewRecorder()
+	WriteJSON(w, &Dummy{}, http.StatusOK)
+	if w.Code != 500 {
+		t.Errorf("expected response code %v; got %v", 500, w.Code)
+	}
+	if len(w.Body.Bytes()) != 0 {
+		t.Errorf("expected error response body to be empty")
+	}
+	_, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
+	if !hasHeader {
+		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
+	}
+
+	//test WriteJSONColl
+	w = httptest.NewRecorder()
+	oints := []Ointment{
+		Ointment{},
+	}
+	coll := make([]Model, len(oints))
+	for k, v := range oints {
+		coll[k] = &v
+	}
+	cursor = "cursorabc"
+	WriteJSONColl(w, coll, http.StatusOK, cursor)
+	if w.Code != 200 {
+		t.Errorf("expected response code %v; got %v", 200, w.Code)
+	}
+	json = "[{\"id\":null,\"batch\":0,\"Expiry\":\"\",\"Name\":\"\"}]\n"
+	if string(w.Body.Bytes()) != json {
+		t.Errorf("expected JSON output:\n - %v\ngot:\n - %v", json, string(w.Body.Bytes()))
+	}
+	header, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HEADER_CURSOR)]
+	if !hasHeader {
+		t.Errorf("expected response to contain header %v", HEADER_CURSOR)
+	}
+	if len(header) != 1 {
+		t.Errorf("expected response header %v to contain only %v value; got %v", HEADER_CURSOR, 1, len(header))
+	}
+	if header[0] != cursor {
+		t.Errorf("expected response header value %v; got %v", cursor, header)
+	}
+
+	w = httptest.NewRecorder()
+	dums := []Dummy{Dummy{}}
+	coll = make([]Model, len(dums))
+	for k, v := range dums {
+		coll[k] = &v
+	}
+	WriteJSONColl(w, coll, http.StatusOK, cursor)
+	if w.Code != 500 {
+		t.Errorf("expected response code %v; got %v", 500, w.Code)
+	}
+	if len(w.Body.Bytes()) != 0 {
+		t.Errorf("expected error response body to be empty")
+	}
+	for k, v := range w.Header() {
+		fmt.Println(k, " - ", v)
+	}
+	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
+	if !hasHeader {
+		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
+	}
+	//test WriteLogRespErr
+	c1 := appengine.NewContext(r1)
+	w = httptest.NewRecorder()
+	WriteLogRespErr(c1, w, http.StatusBadRequest, InvalidError{"Invalid request"})
+	if w.Code != 400 {
+		t.Errorf("expected response code %v; got %v", 400, w.Code)
+	}
+	if len(w.Body.Bytes()) != 0 {
+		t.Errorf("expected error response body to be empty")
+	}
+	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
+	if !hasHeader {
+		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
 	}
 }

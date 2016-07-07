@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.5.2] - 2016-07-07
+
+### Changed
+- Achieved 100% code coverage.
+
 ## [0.5.1] - 2016-07-06
 
 ### Added
