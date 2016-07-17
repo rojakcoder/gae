@@ -3,12 +3,13 @@ package gae
 import (
 	"encoding/json"
 	"fmt"
-	"golang.org/x/net/context"
-	"google.golang.org/appengine/aetest"
-	"google.golang.org/appengine/datastore"
 	"regexp"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
+	"google.golang.org/appengine/aetest"
+	"google.golang.org/appengine/datastore"
 )
 
 type Ointment struct {
@@ -277,6 +278,15 @@ func TestDateTime(t *testing.T) {
 		t.Errorf("expected empty string for zeroed time; got %v", string(j1))
 	}
 
+	t1a := DateTime{time.Time{}}
+	err := t1a.UnmarshalJSON(([]byte)(`""`))
+	if err != nil {
+		t.Errorf("error unmarshalling time from empty quotes \"\": %v", err)
+	}
+	if !t1a.IsZero() {
+		t.Errorf("expect time to be zeroed; got %v", t1a)
+	}
+
 	t2 := DateTime{time.Now()}
 	if t1.Equal(t2) {
 		t.Errorf("t1 (%v) should not be equal to t2 (%v)", t1, t2)
@@ -289,5 +299,20 @@ func TestDateTime(t *testing.T) {
 	re := regexp.MustCompile(ts3)
 	if !re.MatchString(string(j3)) {
 		t.Errorf("expected JSON time to be `%v` (with quotes); got %v", ts3, string(j3))
+	}
+
+	//test converting invalid JSON
+	t1b := DateTime{time.Time{}}
+	err = t1b.UnmarshalJSON([]byte("invalid"))
+	if err == nil {
+		t.Errorf("expect unmarshalling to return error for empty string")
+	}
+
+	//test converting partly invalid JSON (
+	t4, err := NewDateTime(`"2016-07-32T10:33:00+08:00"`)
+	if err == nil {
+		t.Errorf("expect unmarshalling to return error for invalid timestamp; converted to %v", t4)
+	} else {
+		fmt.Println("err", err)
 	}
 }

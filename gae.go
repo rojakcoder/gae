@@ -2,6 +2,7 @@
 package gae
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -78,6 +79,10 @@ func (this *DateTime) MarshalJSON() ([]byte, error) {
 // understand an empty string ("") and convert it to a zeroed `time.Time`
 // instance.
 func (this *DateTime) UnmarshalJSON(input []byte) error {
+	if bytes.Equal([]byte(`""`), input) { //i.e. ""
+		this.Time = time.Time{}
+		return nil
+	}
 	var s string
 	if err := json.Unmarshal(input, &s); err != nil {
 		return err
@@ -88,6 +93,15 @@ func (this *DateTime) UnmarshalJSON(input []byte) error {
 	}
 	this.Time = t
 	return nil
+}
+
+// NewDateTime creates a new DateTime instance from a string. The parameter
+// `tstamp` is a string in the format `"YYYY-MM-DDTHH:mm:ss+HH:mm"` (enclosing
+// quotes are required).
+func NewDateTime(tstamp string) (DateTime, error) {
+	dt := DateTime{time.Time{}}
+	err := dt.UnmarshalJSON([]byte(tstamp))
+	return dt, err
 }
 
 // EntityNotFoundError is for Datastore retrieval not finding the entity.

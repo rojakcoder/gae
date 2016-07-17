@@ -1,5 +1,14 @@
 # Change Log
 
+## [0.6.0] - 2016-07-17
+
+### Added
+- Added a new function for easily creating new DateTime instances.
+
+### Changed
+- Fixed a bug with date unmarshalling that does not handle empty quotes.
+- Achieved 100% coverage on DateTime and methods.
+
 ## [0.5.1] - 2016-07-06
 
 ### Added
