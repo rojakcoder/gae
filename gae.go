@@ -233,10 +233,7 @@ func DeleteByID(ctx context.Context, id string) error {
 
 // DeleteByKey removes an entity from the Datastore.
 func DeleteByKey(ctx context.Context, k *datastore.Key) error {
-	if err := datastore.Delete(ctx, k); err != nil {
-		return err
-	}
-	return nil
+	return datastore.Delete(ctx, k)
 }
 
 // IsValid checks if a model has satisfied its validation rules.
@@ -260,10 +257,7 @@ func LoadByID(ctx context.Context, id string, m Model) error {
 // LoadByKey retrieves a model from the Datastore.
 func LoadByKey(ctx context.Context, k *datastore.Key, m Model) error {
 	m.SetKey(k)
-	if err := datastore.Get(ctx, k, m); err != nil {
-		return err
-	}
-	return nil
+	return datastore.Get(ctx, k, m)
 }
 
 // PrepPageParams parses the query parameters to get the pagination cursor and
