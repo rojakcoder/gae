@@ -130,6 +130,10 @@ func TestJSON(t *testing.T) {
 	var o1 Ointment
 	err = json.Unmarshal(j, &o1)
 
+	if err != nil {
+		t.Errorf("Error parsing JSON: %v\nJSON: %v", err, string(j))
+	}
+
 	if o1.KeyID != nil {
 		t.Error("Object KeyID is not empty:", o1.KeyID)
 	}
@@ -186,8 +190,9 @@ func TestJSON(t *testing.T) {
 	//parsing of non-empty JSON
 	o2 := &Ointment{}
 	err = json.Unmarshal(j, o2)
+
 	if err != nil {
-		t.Error("Failed to convert JSON to Ointment", err)
+		t.Errorf("Failed to convert JSON to Ointment: %v\nJSON: %v", err, string(j))
 	}
 
 	if o2.Batch != m2.Batch {

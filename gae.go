@@ -337,12 +337,12 @@ func WriteJSON(w http.ResponseWriter, m Model, status int) {
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
 func WriteJSONColl(w http.ResponseWriter, m []Model, status int, cursor string) {
+	w.Header().Add(HEADER_CURSOR, cursor)
+	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(m); err != nil {
 		WriteRespErr(w, http.StatusInternalServerError, err)
 		return
 	}
-	w.Header().Add(HEADER_CURSOR, cursor)
-	w.WriteHeader(status)
 }
 
 // WriteLogRespErr logs the error string and then writes it to the response

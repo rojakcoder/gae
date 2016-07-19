@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.6.1] - 2016-07-19
+
+### Changed
+- Changed the sequence of writing response header to avoid the warning of
+multiple write header calls.
+
 ## [0.6.0] - 2016-07-17
 
 ### Added
