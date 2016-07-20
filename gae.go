@@ -104,6 +104,14 @@ func NewDateTime(tstamp string) (DateTime, error) {
 	return dt, err
 }
 
+// NewDateTimeNow creates a new DateTime instance representing the moment in
+// time the function was called. This is basically shorthand for:
+//
+//	DateTime{time.Now()}
+func NewDateTimeNow() DateTime {
+	return DateTime{time.Now()}
+}
+
 // EntityNotFoundError is for Datastore retrieval not finding the entity.
 type EntityNotFoundError struct {
 	Kind string
@@ -337,11 +345,12 @@ func WriteJSON(w http.ResponseWriter, m Model, status int) {
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
 func WriteJSONColl(w http.ResponseWriter, m []Model, status int, cursor string) {
-	w.Header().Add(HEADER_CURSOR, cursor)
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(m); err != nil {
+	err := json.NewEncoder(w).Encode(m)
+	if err != nil {
 		WriteRespErr(w, http.StatusInternalServerError, err)
-		return
+	} else {
+		w.Header().Add(HEADER_CURSOR, cursor)
+		w.WriteHeader(status)
 	}
 }
 

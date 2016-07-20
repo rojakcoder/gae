@@ -362,6 +362,12 @@ func TestDateTime(t *testing.T) {
 	if err == nil {
 		t.Errorf("expect unmarshalling to return error for invalid timestamp; converted to %v", t4)
 	}
+
+	now1 := DateTime{time.Now()}
+	now2 := NewDateTimeNow()
+	if !now1.Equal(now2) {
+		t.Errorf("expect both timestamps to be the same since they should occur within the same second; got %v and %v", now1, now2)
+	}
 }
 
 func TestCoverage(t *testing.T) {
@@ -575,12 +581,13 @@ func TestServerFuncs(t *testing.T) {
 	if len(w.Body.Bytes()) != 0 {
 		t.Errorf("expected error response body to be empty")
 	}
-	for k, v := range w.Header() {
-		fmt.Println(k, " - ", v)
-	}
 	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
 	if !hasHeader {
 		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
+	}
+	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_CURSOR)]
+	if hasHeader {
+		t.Errorf("expected error response to NOT contain header %v", HEADER_CURSOR)
 	}
 	//test WriteLogRespErr
 	c1 := appengine.NewContext(r1)

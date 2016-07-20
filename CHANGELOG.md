@@ -1,5 +1,15 @@
 # Change Log
 
+## [0.7.0] - 2016-07-20
+
+### Added
+- Added a new convenient method for creating DateTime instance for the current
+time.
+
+### Changed
+- Changed the sequence of header writing for WriteJSONColl to avoid the
+warning.
+
 ## [0.6.1] - 2016-07-19
 
 ### Changed
