@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.8.0] - 2016-08-19
+
+### Changed
+- Added a few helper methods for interacting with Memcache.
+
 ## [0.7.0] - 2016-07-20
 
 ### Added

@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/log"
+	"google.golang.org/appengine/memcache"
 )
 
 const (
@@ -296,6 +297,38 @@ func ReadID(m Model) string {
 	return m.Key().Encode()
 }
 
+// RetrieveEntityByID attempts to retrieve the entity from Memcache before
+// retrieving from the Datastore.
+//
+// If the entity is retrieved from the Datastore, it is placed into Memcache.
+func RetrieveEntityByID(ctx context.Context, id string, m Model) error {
+	//inst := new(Class)
+	_m, err := memcache.Get(ctx, id) //read from cache
+	if err == nil {                  //i.e. a hit
+		e := json.Unmarshal(_m.Value, m)
+		err = e
+	}
+	if err != nil { //i.e. a miss or error
+		err = LoadByID(ctx, id, m) //load from DB
+		if err != nil {
+			return err
+		} //else update the cache
+		if mj, err := json.Marshal(m); err == nil {
+			item := &memcache.Item{
+				Key:   id,
+				Value: mj,
+			}
+			memcache.Set(ctx, item) //ignore any error
+		} //else marshalling error - cannot cache
+	}
+	return nil
+}
+
+// RetrieveEntityByKey does the same thing as `RetrieveEntityByID`.
+func RetrieveEntityByKey(ctx context.Context, key *datastore.Key, m Model) error {
+	return RetrieveEntityByID(ctx, key.Encode(), m)
+}
+
 // Save checks for validity of model m prior to saving to the Datastore.
 //
 // Save also invokes the Presave method of m if it is set to perform any
@@ -314,6 +347,27 @@ func Save(ctx context.Context, m Model) error {
 		return err
 	}
 	m.SetKey(key)
+	return nil
+}
+
+// SaveCacheEntity saves and caches the entity.
+//
+// The operation to save the entity to the Datastore is performed first. If
+// that fails, this function returns with the error.
+//
+// After saving the entity, it is then put into Memcache. Any error from
+// Memcache is ignored.
+func SaveCacheEntity(ctx context.Context, m Model) error {
+	if err := Save(ctx, m); err != nil {
+		return err
+	}
+	if _m, err := json.Marshal(m); err == nil {
+		item := &memcache.Item{
+			Key:   m.Key().Encode(),
+			Value: _m,
+		}
+		memcache.Set(ctx, item) //ignore any error
+	}
 	return nil
 }
 
