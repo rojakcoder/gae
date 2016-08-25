@@ -3,7 +3,6 @@ package gae
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -14,6 +13,7 @@ import (
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/aetest"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/memcache"
 )
 
 type Dummy struct {
@@ -51,7 +51,9 @@ func (this *Ointment) MakeKey(ctx context.Context) *datastore.Key {
 }
 
 func (this *Ointment) Presave() {
-	this.Expiry = DateTime{this.Expiry.AddDate(0, -1, 0)}
+	if !this.Expiry.IsZero() {
+		this.Expiry = DateTime{this.Expiry.AddDate(0, -1, 0)}
+	}
 }
 
 func (this *Ointment) SetKey(key *datastore.Key) error {
@@ -169,7 +171,6 @@ func TestJSON(t *testing.T) {
 		t.Errorf("JSON ID is not set. Expected %v, got %v\n", exp, js)
 	}
 
-	exp = fmt.Sprintf(`"batch":%v`, m2.Batch)
 	re = regexp.MustCompile(exp)
 	if !re.MatchString(js) {
 		t.Errorf("JSON batch is not set. Expected %v, got %v\n", exp, js)
@@ -181,7 +182,6 @@ func TestJSON(t *testing.T) {
 		t.Errorf("JSON Expiry is not set. Expected %v, got %v\n", exp, js)
 	}
 
-	exp = fmt.Sprintf(`"Name":"%v"`, m2.Name)
 	re = regexp.MustCompile(exp)
 	if !re.MatchString(js) {
 		t.Errorf("JSON Name is not set. Expected %v, got %v\n", exp, js)
@@ -286,40 +286,36 @@ type Package struct {
 func TestEquality(t *testing.T) {
 	t1, _ := time.Parse(time.RFC3339, "2007-06-05T16:03:02+08:00")
 	t2, _ := time.Parse(time.RFC3339, "2008-06-05T16:03:02+08:00")
-	t3, _ := time.Parse(time.RFC3339, "2009-06-05T16:03:02+08:00")
-	o1 := Ointment{nil, 100, DateTime{t1}, "ml"}
-	o2 := Ointment{nil, 200, DateTime{t2}, "cc"}
-	o1a := Ointment{nil, 100, DateTime{t3}, "ml"}
+	a1 := Ointment{nil, 100, DateTime{t1}, "ml"}
+	a2 := Ointment{nil, 100, DateTime{t1}, "ml"}
+	b1 := Ointment{nil, 100, DateTime{t1}, "cc"}
+	b2 := Ointment{nil, 100, DateTime{t2}, "ml"}
 
-	if o1 == o2 {
-		fmt.Println("o1 is equal to o2")
-	} else {
-		fmt.Println("o1 is NOT equal to o2")
+	if a1 != a2 {
+		t.Error("a1 should be equal to a2 because all values are identical")
 	}
-	if o1 == o1a {
-		fmt.Println("o1 is equal to o1a")
-	} else {
-		fmt.Println("o1 is NOT equal to o1a")
+	if a1 == b1 {
+		t.Errorf("a1 should not be equal to b1 because of different Name values")
+	}
+	if a1 == b2 {
+		t.Error("a1 should not be equal to b2 because of different DateTime values")
 	}
 
-	p1 := Package{12, &o1}
-	p2 := Package{12, &o2}
-	p1a := Package{12, &o1a}
+	p1 := Package{12, &a1}
+	p2 := Package{12, &a2}
 
 	if p1 == p2 {
-		fmt.Println("p1 is equal to p2")
-	} else {
-		fmt.Println("p1 is NOT equal to p2")
+		t.Error("p1 should not be equal to p2 because the memory locations of Type are different even though values are the same")
 	}
-	if p1 == p1a {
-		fmt.Println("p1 is equal to p1a")
-	} else {
-		fmt.Println("p1 is NOT equal to p1a")
-	}
-
 }
 
 func TestDateTime(t *testing.T) {
+	test := func(s string, exp, act int) {
+		if exp != act {
+			t.Errorf(s, exp, act)
+		}
+	}
+
 	t1 := DateTime{time.Time{}}
 	j1, _ := t1.MarshalJSON()
 
@@ -357,10 +353,37 @@ func TestDateTime(t *testing.T) {
 		t.Errorf("expect unmarshalling to return error for empty string")
 	}
 
-	//test converting partly invalid JSON (
-	t4, err := NewDateTime(`"2016-07-32T10:33:00+08:00"`)
+	//test converting partly invalid JSON
+	t1c := DateTime{}
+	err = t1c.UnmarshalJSON([]byte(`"2016-07-32T10:33:00+08:00"`))
 	if err == nil {
-		t.Errorf("expect unmarshalling to return error for invalid timestamp; converted to %v", t4)
+		t.Errorf("expect unmarshalling to return error for invalid timestamp")
+	}
+
+	t3, err = NewDateTime("2016-05-04T13:22:31+08:00")
+	if err != nil {
+		t.Error("expect NewDateTime not to return error; got", err)
+	}
+	test("expect year %d; got %d", 2016, t3.Year())
+	test("expect month %d; got %d", 5, int(t3.Month()))
+	test("expect day %d; got %d", 4, t3.Day())
+	test("expect hour %d; got %d", 13, t3.Hour())
+	test("expect minute %d; got %d", 22, t3.Minute())
+	test("expect second %d; got %d", 31, t3.Second())
+
+	_, err = NewDateTime("2016-05-04T13:22:31")
+	if err == nil {
+		t.Error("expect NewDateTime to return error without timezone")
+	}
+
+	_, err = NewDateTime(`"2016-05-04T13:22:31+08:00"`)
+	if err == nil {
+		t.Error("expect NewDateTime to return error due to extraneous quotes")
+	}
+
+	_, err = NewDateTime("2016-07-32T10:33:00+08:00")
+	if err == nil {
+		t.Errorf("expect NewDateTime to return error due to invalid date")
 	}
 
 	now1 := DateTime{time.Now()}
@@ -402,6 +425,15 @@ func TestCoverage(t *testing.T) {
 	//cover Save
 	if err := Save(ctx, Dummy{}); err == nil {
 		t.Error("expected error from saving Dummy")
+	}
+
+	//cover String
+	now := NewDateTimeNow()
+	s := now.String()
+	ts := "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+	re := regexp.MustCompile(ts)
+	if !re.MatchString(s) {
+		t.Errorf("expect DateTime.String to be in the format %v; got %v", ts, s)
 	}
 }
 
@@ -476,6 +508,89 @@ func TestErrors(t *testing.T) {
 		if tt.e.Error() != tt.want {
 			t.Errorf("Error string for ValidityError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
 		}
+	}
+}
+
+func TestSaveRetrieveEntity(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	//defer done() - manual invocation
+	test := func(s string, exp, act interface{}) {
+		if exp != act {
+			t.Errorf(s, exp, act)
+		}
+	}
+
+	m1 := &Ointment{}
+	k1 := datastore.NewKey(ctx, "go", "go", 0, nil)
+	if err := RetrieveEntityByKey(ctx, k1, m1); err == nil {
+		t.Error("expect EntityNotFound error; got none")
+	}
+
+	m0 := &Ointment{}
+	m0.KeyID = k1
+	m0.Batch = 12
+	m0.Name = "M One"
+	if err := Save(ctx, m0); err != nil {
+		t.Fatal("error saving to DB", err)
+	}
+
+	if err := RetrieveEntityByKey(ctx, k1, m1); err != nil {
+		t.Errorf("expect RetrieveEntityByKey to get a cache miss, DB hit; got error %v", err.Error())
+	}
+	test("expect Batch value %v; got %v", m0.Batch, m1.Batch)
+	test("expect Name value %v; got %v", m0.Name, m1.Name)
+
+	m2 := &Ointment{}
+	if err := RetrieveEntityByKey(ctx, k1, m2); err != nil {
+		t.Error("expect RetrieveEntityByKey to get a cache hit; got error", err)
+	}
+	test("expect Batch value %v; got %v", m0.Batch, m2.Batch)
+	test("expect Name value %v; got %v", m0.Name, m2.Name)
+
+	//delete the entity from DB to test cache hit
+	if err := DeleteByKey(ctx, k1); err != nil {
+		t.Fatal("error deleting from DB", err)
+	}
+	m3 := &Ointment{}
+	if err := RetrieveEntityByKey(ctx, k1, m3); err != nil {
+		t.Error("expect RetrieveEntityByKey to get a cache hit even if entity is deleted; got error", err)
+	}
+	test("expect Batch value %v; got %v", m0.Batch, m3.Batch)
+	test("expect Name value %v; got %v", m0.Name, m3.Name)
+
+	//empty the cache and test cache miss
+	if err := memcache.Delete(ctx, k1.Encode()); err != nil {
+		t.Error("memcache.Delete returned an error when none was expected:", err)
+	}
+	if err := memcache.Delete(ctx, k1.Encode()); err != memcache.ErrCacheMiss {
+		t.Error("expect memcache.Delete to return ErrCacheMiss due to removal of key")
+	}
+	//retrieval should now give error
+	m4 := &Ointment{}
+	if err := RetrieveEntityByKey(ctx, k1, m4); err != datastore.ErrNoSuchEntity {
+		t.Error("expect RetrieveEntityByKey to return ErrNoSuchEntity; got", err)
+	}
+
+	if err := SaveCacheEntity(ctx, m1); err != nil {
+		t.Errorf("expect SaveCacheEntity to complete with no errors; got %v", err.Error())
+	}
+	item, err := memcache.Get(ctx, k1.Encode()) //read from cache
+	if err != nil {
+		t.Error("expect SaveCacheEntity to cache entity; got error:", err)
+	}
+	m5 := &Ointment{}
+	if json.Unmarshal(item.Value, m5) != nil {
+		t.Fatal("json.Unmarshal returned error")
+	}
+	test("expect Batch value %v; got %v", m0.Batch, m5.Batch)
+	test("expect Name value %v; got %v", m0.Name, m5.Name)
+
+	done()
+	if SaveCacheEntity(ctx, m1) == nil {
+		t.Error("expect SaveCacheEntity to return error after done(); got none")
 	}
 }
 
@@ -592,7 +707,7 @@ func TestServerFuncs(t *testing.T) {
 	//test WriteLogRespErr
 	c1 := appengine.NewContext(r1)
 	w = httptest.NewRecorder()
-	WriteLogRespErr(c1, w, http.StatusBadRequest, InvalidError{"Invalid request"})
+	WriteLogRespErr(c1, w, http.StatusBadRequest, InvalidError{"Invalid request - this output is expected in TestServerFuncs"})
 	if w.Code != 400 {
 		t.Errorf("expected response code %v; got %v", 400, w.Code)
 	}

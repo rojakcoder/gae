@@ -1,5 +1,16 @@
 # Change Log
 
+## [0.9.0] - 2016-08-24
+
+### Added
+- Added a String method to DateTime to return the time in the RFC3339 format.
+
+### Changed
+- Changed NewDateTime function to accept a string in the format of RFC3339 to
+create a DateTime instance; previously it was expecting a JSON string - the
+difference being that the latter requires the time string to be in quotes.
+- Updated the test to keep 100% code coverage.
+
 ## [0.8.0] - 2016-08-19
 
 ### Changed

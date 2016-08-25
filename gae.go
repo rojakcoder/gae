@@ -74,6 +74,16 @@ func (this *DateTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(this.Time.Format(time.RFC3339))
 }
 
+// String for DateTime returns the time in this format
+// "YYYY-MM-DDTHH:mm:ss+HH:mm"
+//
+//	e.g. 2006-01-02T15:04:05+07:00
+//
+// In other words, the output is formatted using `time.RFC3339`
+func (this *DateTime) String() string {
+	return this.Time.Format(time.RFC3339)
+}
+
 // UnmarshalJSON expects the input to a string like
 //  "2006-01-02T15:04:05+07:00"
 // to convert into a time.Time struct wrapped inside DateTime. It is able to
@@ -97,12 +107,14 @@ func (this *DateTime) UnmarshalJSON(input []byte) error {
 }
 
 // NewDateTime creates a new DateTime instance from a string. The parameter
-// `tstamp` is a string in the format `"YYYY-MM-DDTHH:mm:ss+HH:mm"` (enclosing
-// quotes are required).
+// `tstamp` is a string in the format "YYYY-MM-DDTHH:mm:ss+HH:mm"
 func NewDateTime(tstamp string) (DateTime, error) {
-	dt := DateTime{time.Time{}}
-	err := dt.UnmarshalJSON([]byte(tstamp))
-	return dt, err
+	t, err := time.Parse(time.RFC3339, tstamp)
+	if err != nil {
+		return DateTime{}, err
+	} else {
+		return DateTime{t}, nil
+	}
 }
 
 // NewDateTimeNow creates a new DateTime instance representing the moment in
@@ -302,7 +314,6 @@ func ReadID(m Model) string {
 //
 // If the entity is retrieved from the Datastore, it is placed into Memcache.
 func RetrieveEntityByID(ctx context.Context, id string, m Model) error {
-	//inst := new(Class)
 	_m, err := memcache.Get(ctx, id) //read from cache
 	if err == nil {                  //i.e. a hit
 		e := json.Unmarshal(_m.Value, m)
@@ -399,8 +410,7 @@ func WriteJSON(w http.ResponseWriter, m Model, status int) {
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
 func WriteJSONColl(w http.ResponseWriter, m []Model, status int, cursor string) {
-	err := json.NewEncoder(w).Encode(m)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(m); err != nil {
 		WriteRespErr(w, http.StatusInternalServerError, err)
 	} else {
 		w.Header().Add(HEADER_CURSOR, cursor)
