@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.10.0] - 2016-11-06
+
+### Added
+- Added the Session struct for managing session.
+
 ## [0.9.0] - 2016-08-24
 
 ### Added

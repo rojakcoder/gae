@@ -199,6 +199,7 @@ type Page struct {
 	Title       string
 	Description string
 	Path        string
+	Param       map[string]string
 	Handler     func(http.ResponseWriter, *http.Request)
 }
 
@@ -240,6 +241,96 @@ type Model interface {
 // Presave is called after IsValid.
 type Presaver interface {
 	Presave()
+}
+
+// Session keeps track of a user's session information.
+//
+// Any value that it needs to store should be jsonified and stored as a string
+// in the Value field.
+type Session struct {
+	KeyID      *datastore.Key `datastore:"-"`
+	Name       string         `datastore:",noindex"`
+	Value      string         `datastore:",noindex"`
+	Expiration time.Time      `datastore:",noindex"`
+}
+
+// Valid for Session returns true if the Expiration field is after the current
+// time.
+//
+// If the value is not set (i.e. `IsZero`) then the session is also not valid.
+func (this *Session) Valid() bool {
+	if this.Expiration.IsZero() {
+		return false
+	}
+	if this.Expiration.Before(time.Now()) {
+		return false
+	}
+	return true
+}
+
+// CheckSession checks for a valid session based on its ID.
+//
+// If the session does not exist, false is returned. If the expiration time of
+// the session is after the current time, returns true. Returns false otherwise.
+func CheckSession(ctx context.Context, sessID string) bool {
+	s := &Session{}
+	item, err := memcache.Get(ctx, sessID) //read from cache
+	if err == nil {                        //i.e. a hit
+		err = json.Unmarshal(item.Value, s)
+	}
+	if err != nil { //i.e. a miss or error
+		k, err := datastore.DecodeKey(sessID)
+		if err != nil {
+			return false
+		}
+		err = datastore.Get(ctx, k, s)
+		if err != nil {
+			return false
+		} //else update the cache
+		if _s, err := json.Marshal(s); err == nil {
+			item := &memcache.Item{
+				Key:   sessID,
+				Value: _s,
+			}
+			memcache.Set(ctx, item) //ignore any error
+		} //else marshalling error - cannot cache
+	}
+	return false
+}
+
+// MakeSessionCookie creates a session and a cookie based on the database Key
+// encoded value.
+//
+// The session is also placed in Memcache in addition to the Datastore.
+func MakeSessionCookie(ctx context.Context, name string, obj interface{},
+	duration int64) (*http.Cookie, error) {
+	dur := time.Duration(duration) * time.Second
+	exp := time.Now().Add(dur)
+	s := &Session{
+		Name:       name,
+		Expiration: exp,
+	}
+	if obj != nil {
+		if js, e := json.Marshal(obj); e == nil {
+			s.Value = string(js)
+		}
+	}
+	key, err := datastore.Put(ctx, datastore.NewIncompleteKey(ctx, "GAESession", nil), s)
+	if err != nil {
+		return nil, err
+	}
+	if _s, err := json.Marshal(s); err == nil {
+		item := &memcache.Item{
+			Key:   key.Encode(),
+			Value: _s,
+		}
+		memcache.Set(ctx, item)
+	}
+	return &http.Cookie{
+		Name:    name,
+		Value:   key.Encode(),
+		Expires: exp,
+	}, nil
 }
 
 // DeleteByID removes an entity from the Datastore using the opaque

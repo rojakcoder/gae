@@ -719,3 +719,16 @@ func TestServerFuncs(t *testing.T) {
 		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
 	}
 }
+
+func TestSession(t *testing.T) {
+	inst, err := aetest.NewInstance(nil)
+	if err != nil {
+		t.Fatalf("Failed to create instance: %v", err)
+	}
+	defer inst.Close()
+
+	s1 := &Session{}
+	if s1.Valid() {
+		t.Error("Session is valid when it should not be")
+	}
+}
