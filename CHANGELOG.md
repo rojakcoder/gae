@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.11.0] - 2016-11-20
+
+### Changed
+- Corrected the CheckSession function.
+- Achieved 100% code coverage
+
 ## [0.10.0] - 2016-11-06
 
 ### Added

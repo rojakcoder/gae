@@ -24,6 +24,9 @@ const (
 	// lower-case because it is following the specifications and App Engine
 	// changes it to all lowercase no matter the original casing.
 	HEADER_ERROR = "x-error"
+	// KIND_SESSION is the kind of the entity stored in the datastore for
+	// maintaining session.
+	KIND_SESSION = "GAESession"
 )
 
 var (
@@ -278,30 +281,36 @@ func CheckSession(ctx context.Context, sessID string) bool {
 	if err == nil {                        //i.e. a hit
 		err = json.Unmarshal(item.Value, s)
 	}
-	if err != nil { //i.e. a miss or error
-		k, err := datastore.DecodeKey(sessID)
-		if err != nil {
-			return false
-		}
-		err = datastore.Get(ctx, k, s)
-		if err != nil {
-			return false
-		} //else update the cache
-		if _s, err := json.Marshal(s); err == nil {
-			item := &memcache.Item{
-				Key:   sessID,
-				Value: _s,
-			}
-			memcache.Set(ctx, item) //ignore any error
-		} //else marshalling error - cannot cache
+	if err == nil { //i.e. a valid hit
+		return s.Valid()
+	} //else miss or error
+
+	k, err := datastore.DecodeKey(sessID)
+	if err != nil {
+		return false
 	}
-	return false
+	err = datastore.Get(ctx, k, s)
+	if err != nil {
+		return false
+	} //else update the cache
+	if _s, err := json.Marshal(s); err == nil {
+		item := &memcache.Item{
+			Key:   sessID,
+			Value: _s,
+		}
+		memcache.Add(ctx, item) //ignore any error
+	} //else marshalling error - cannot cache
+	return s.Valid() //even if cache error, store success
 }
 
 // MakeSessionCookie creates a session and a cookie based on the database Key
 // encoded value.
 //
 // The session is also placed in Memcache in addition to the Datastore.
+//
+// The `obj` parameter is the value to be stored in the cookie. It is JSONified
+// before storing as a string. The `duration` parameter is the number of
+// seconds for which the cookie is to be valid.
 func MakeSessionCookie(ctx context.Context, name string, obj interface{},
 	duration int64) (*http.Cookie, error) {
 	dur := time.Duration(duration) * time.Second
@@ -315,7 +324,7 @@ func MakeSessionCookie(ctx context.Context, name string, obj interface{},
 			s.Value = string(js)
 		}
 	}
-	key, err := datastore.Put(ctx, datastore.NewIncompleteKey(ctx, "GAESession", nil), s)
+	key, err := datastore.Put(ctx, datastore.NewIncompleteKey(ctx, KIND_SESSION, nil), s)
 	if err != nil {
 		return nil, err
 	}

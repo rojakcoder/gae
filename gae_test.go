@@ -721,14 +721,89 @@ func TestServerFuncs(t *testing.T) {
 }
 
 func TestSession(t *testing.T) {
-	inst, err := aetest.NewInstance(nil)
+	inst, err := aetest.NewInstance(&aetest.Options{
+		StronglyConsistentDatastore: true,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create instance: %v", err)
 	}
-	defer inst.Close()
+	//defer inst.Close() - manual invocation for code coverge
+	r, err := inst.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := appengine.NewContext(r)
 
 	s1 := &Session{}
 	if s1.Valid() {
 		t.Error("Session is valid when it should not be")
+	}
+
+	dur := time.Duration(1) * time.Hour
+	exp := time.Now().Add(dur)
+	s2 := &Session{
+		Name:       "session",
+		Value:      "two",
+		Expiration: exp,
+	}
+	if !s2.Valid() {
+		t.Error("Session is invalid when it should be")
+	}
+
+	dur = time.Duration(-1) * time.Hour
+	exp = time.Now().Add(dur)
+	s3 := &Session{
+		Name:       "session",
+		Value:      "three",
+		Expiration: exp,
+	}
+	if s3.Valid() {
+		t.Error("Session is valid when it should not be")
+	}
+
+	n4 := "session"
+	v4 := "four"
+	s4, err := MakeSessionCookie(ctx, n4, v4, 60)
+	if n4 != s4.Name {
+		t.Errorf("expect name of cookie to be %v; got %v", n4, s4.Name)
+	}
+	if "" == s4.Value {
+		t.Error("expect value of cookie to be non-empty; got empty string")
+	}
+
+	testCheckSession := func(name string, exp, act bool) {
+		if exp != act {
+			t.Errorf("expect %v to return %v; got %v", name, exp, act)
+		}
+	}
+
+	verified := CheckSession(ctx, s4.Value)
+	testCheckSession("CheckSession (valid session from cache)", true, verified)
+	memcache.Delete(ctx, s4.Value)
+	verified = CheckSession(ctx, s4.Value)
+	testCheckSession("CheckSession (valid session from store)", true, verified)
+
+	k5 := datastore.NewKey(ctx, KIND_SESSION, "", 12, nil)
+	verified = CheckSession(ctx, k5.Encode())
+	testCheckSession("CheckSession (non-existing session)", false, verified)
+	item := &memcache.Item{
+		Key:   k5.Encode(),
+		Value: []byte("123"),
+	}
+	memcache.Set(ctx, item)
+	verified = CheckSession(ctx, k5.Encode())
+	testCheckSession("CheckSession (invalid cache item)", false, verified)
+
+	s6, err := MakeSessionCookie(ctx, "session", "six", -60)
+	verified = CheckSession(ctx, s6.Value)
+	testCheckSession("CheckSession (expired session)", false, verified)
+
+	verified = CheckSession(ctx, "invalid-ID")
+	testCheckSession("CheckSession (invalid ID)", false, verified)
+
+	inst.Close()
+	_, e := MakeSessionCookie(ctx, n4, v4, 60)
+	if e == nil {
+		t.Error("expect MakeSessionCookie to return error after Close(); got none")
 	}
 }
