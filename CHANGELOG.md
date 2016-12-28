@@ -1,12 +1,23 @@
 # Change Log
 
-## [0.10.0] - 2016-12-28
+## [0.12.0] - 2016-12-28
 
 ### Added
 - Added a new property `Dictionary` to Page for convenience of creating maps
 for use with templates. Along with this is the `ToDictionary` method that
 creates a map combining the additional variables with the Title and
 Description values.
+
+## [0.11.0] - 2016-11-20
+
+### Changed
+- Corrected the CheckSession function.
+- Achieved 100% code coverage
+
+## [0.10.0] - 2016-11-06
+
+### Added
+- Added the Session struct for managing session.
 
 ## [0.9.0] - 2016-08-24
 
