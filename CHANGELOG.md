@@ -1,5 +1,13 @@
 # Change Log
 
+## [0.10.0] - 2016-12-28
+
+### Added
+- Added a new property `Dictionary` to Page for convenience of creating maps
+for use with templates. Along with this is the `ToDictionary` method that
+creates a map combining the additional variables with the Title and
+Description values.
+
 ## [0.9.0] - 2016-08-24
 
 ### Added
