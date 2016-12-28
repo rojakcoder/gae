@@ -198,8 +198,40 @@ func (this MissingError) Error() string {
 type Page struct {
 	Title       string
 	Description string
+	Dictionary  map[string]string
 	Path        string
 	Handler     func(http.ResponseWriter, *http.Request)
+}
+
+// AddVar is a convenient method to adding values into the Dictionary map.
+//
+// This method performs the additional check for initialization of the
+// Dictionary map so that the calling code has the option of not initializing
+// the map.
+func (this *Page) AddVar(word, meaning string) {
+	if this.Dictionary == nil {
+		this.Dictionary = make(map[string]string)
+	}
+	this.Dictionary[word] = meaning
+}
+
+// ToDictionary creates a map with the existing values in the `Dictionary`
+// field combined with the `Title` and `Description` fields.
+//
+// This is for use with templates where additional variables are needed.
+//
+// Note that if dictionary also contains the same keys ("Title" and
+// "Dictionary"), they will be overridden.
+func (this *Page) ToDictionary() map[string]string {
+	var dict = make(map[string]string)
+	//copy all data over
+	for k, v := range this.Dictionary {
+		dict[k] = v
+	}
+	//copy title and description over
+	dict["Title"] = this.Title
+	dict["Description"] = this.Description
+	return dict
 }
 
 // ValidityError is for errors in model validation.

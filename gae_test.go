@@ -607,6 +607,48 @@ func TestServerFuncs(t *testing.T) {
 		t.Fatalf("Failed to create request for %v: %v", path, err)
 	}
 
+	//test Page struct - especially Dictionary
+	p1 := Page{
+		Title:       "Page 1",
+		Description: "Placeholder for page 1",
+	}
+	d1 := p1.ToDictionary()
+	if len(d1) != 2 {
+		t.Errorf("expected Dictionary to contain %d items; got %d", 2, len(d1))
+	}
+	title := d1["Title"]
+	if p1.Title != (title) {
+		t.Errorf("expected Title in dictionary to be %s; got %s", p1.Title, title)
+	}
+	desc := d1["Description"]
+	if p1.Description != (desc) {
+		t.Errorf("expected Description in dictionary to be %s; got %s", p1.Description, desc)
+	}
+	p2 := Page{
+		Title:       "Page 2",
+		Description: "Placeholder for page 2",
+	}
+	//cannot assign value because Dictionary is not initialized
+	//p2.Dictionary["name"] = "Name 2"
+	p2.AddVar("name", "Name 2")
+	p2.AddVar("number", "Two")
+	d2 := p2.ToDictionary()
+	if len(d2) != 4 {
+		t.Errorf("expected Dictionary to contain %d items; got %d", 4, len(d2))
+	}
+	title = d2["Title"]
+	if p2.Title != (title) {
+		t.Errorf("expected Title in dictionary to be %s; got %s", p2.Title, title)
+	}
+	desc = d2["Description"]
+	if p2.Description != (desc) {
+		t.Errorf("expected Description in dictionary to be %s; got %s", p2.Description, desc)
+	}
+	name := d2["name"]
+	if p2.Dictionary["name"] != (name) {
+		t.Errorf("expected name in dictionary to be %s; got %s", p2.Dictionary["name"], name)
+	}
+
 	//test PrepPageParams
 	limit, cursor := PrepPageParams(r1.URL.Query())
 	if limit != 50 {
