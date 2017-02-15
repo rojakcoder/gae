@@ -32,24 +32,36 @@ const (
 var (
 	// ErrMismatch is returned when a PUT request specifies different values for
 	// the ID in the path parameter and the payload model.
+	//
+	// Deprecated - replaced by MismatchError
 	ErrMismatch = errors.New("mismatched values")
 
 	// ErrMultipleEntities is returned when a Datastore retrieval
 	// finds more than 1 entity with the specified criteria.
+	//
+	// Deprecated - replaced by DuplicateError
 	ErrMultipleEntities = errors.New("multiple entities retrieved when only 1 is expected")
 
 	// ErrNilKey is returned by SetKey methods when the parameter is nil.
+	//
+	// Deprecated - replaced by NilError
 	ErrNilKey = errors.New("key is nil")
 
 	// ErrMissingID is returned when a request does not provide an ID.
+	//
+	// Deprecated - replaced by MissingError
 	ErrMissingID = errors.New("expected ID not specified")
 
 	// ErrUnexpectedID is returned when a POST request includes the ID property in
 	// the payload model when it is not supposed to.
+	//
+	// Deprecated - replaced by InvalidError
 	ErrUnexpectedID = errors.New("ID is specified when it is not expected")
 
 	// ErrWrongType is returned when the provided function argument is
 	// incompatible from what is expected.
+	//
+	// Deprecated - replaced by MismatchError
 	ErrWrongType = errors.New("provided type is different from expected")
 )
 
@@ -129,6 +141,8 @@ func NewDateTimeNow() DateTime {
 }
 
 // EntityNotFoundError is for Datastore retrieval not finding the entity.
+//
+// Deprecated - replaced by NotFoundError
 type EntityNotFoundError struct {
 	Kind string
 	Err  error
@@ -145,56 +159,6 @@ func (this EntityNotFoundError) Error() string {
 		e += ": " + this.Err.Error()
 	}
 	return e
-}
-
-// InvalidError is a generic error for describing invalid conditions.
-//
-// An example is when the request parameter value is in an invalid format.
-type InvalidError struct {
-	Msg string
-}
-
-// Error for InvalidError returns a string in the format:
-//	invalid value: <msg>
-func (this InvalidError) Error() string {
-	return "invalid value: " + this.Msg
-}
-
-// JSONUnmarshalError is for unmarshalling errors when reading request JSON
-// payload.
-//
-// The Msg field should provide an indication of where the error originated
-// from. E.g. CreateSchoolAPI - request body
-type JSONUnmarshalError struct {
-	Msg string
-	Err error
-}
-
-// Error for JSONUnmarshalError returns a string in the format:
-//  unable to parse JSON (<msg>): <error string>
-func (this JSONUnmarshalError) Error() string {
-	e := "unable to parse JSON"
-	if this.Msg != "" {
-		e += " (" + this.Msg + ")"
-	}
-	if this.Err != nil {
-		e += ": " + this.Err.Error()
-	}
-	return e
-}
-
-// MissingError is for missing parameter values.
-//
-// The Msg field should provide a brief description of the parameter whose
-// value is missing.
-type MissingError struct {
-	Msg string
-}
-
-// Error for MissingError returns a string in the format:
-//	missing value: <msg>
-func (this MissingError) Error() string {
-	return "missing value: " + this.Msg
 }
 
 // Page describes the contents for a page. It is to be used with templates.

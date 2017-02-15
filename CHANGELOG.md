@@ -1,5 +1,14 @@
 # Change Log
 
+## [0.13.0] - 2017-02-15
+
+### Added
+- Added errors.go to consolidate the error definitions.
+
+### Changed
+- Moved InvalidError and MissingError to the new file.
+- Deprecated the error values in gae.go
+
 ## [0.12.0] - 2016-12-28
 
 ### Added

@@ -458,8 +458,8 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{InvalidError{}, "invalid value: "},
-		{InvalidError{"Currency expected"}, "invalid value: Currency expected"},
+		{InvalidError{}, "Invalid value: "},
+		{InvalidError{"Currency expected"}, "Invalid value: Currency expected"},
 	}
 	for _, tt := range ieTests {
 		if tt.e.Error() != tt.want {
@@ -472,9 +472,9 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{JSONUnmarshalError{}, "unable to parse JSON"},
-		{JSONUnmarshalError{Msg: "empty string"}, "unable to parse JSON (empty string)"},
-		{JSONUnmarshalError{"numbers only", errors.New("Numbers only")}, "unable to parse JSON (numbers only): Numbers only"},
+		{JSONUnmarshalError{}, "Unable to parse JSON"},
+		{JSONUnmarshalError{Msg: "empty string"}, "Unable to parse JSON (empty string)"},
+		{JSONUnmarshalError{"numbers only", errors.New("Numbers only")}, "Unable to parse JSON (numbers only): Numbers only"},
 	}
 	for _, tt := range jmeTests {
 		if tt.e.Error() != tt.want {
@@ -487,8 +487,8 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{MissingError{}, "missing value: "},
-		{MissingError{"key"}, "missing value: key"},
+		{MissingError{}, "Missing value: "},
+		{MissingError{"key"}, "Missing value: key"},
 	}
 	for _, tt := range meTests {
 		if tt.e.Error() != tt.want {
