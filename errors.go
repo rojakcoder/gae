@@ -74,9 +74,10 @@ type InvalidError struct {
 }
 
 // Error for InvalidError returns a string in the format:
-//	Invalid value: <msg>
+//
+//	Invalid value (<msg>)
 func (this InvalidError) Error() string {
-	return "Invalid value: " + this.Msg
+	return "Invalid value (" + this.Msg + ")"
 }
 
 // IsInvalidError checks if an error is the `InvalidError` type.
@@ -96,35 +97,42 @@ type JSONUnmarshalError struct {
 }
 
 // Error for JSONUnmarshalError returns a string in the format:
-//  unable to parse JSON (<msg>): <error string>
+//
+//  Unable to parse JSON (<msg>) - <error string>
 func (this JSONUnmarshalError) Error() string {
 	m := "Unable to parse JSON"
 	if this.Msg != "" {
 		m += " (" + this.Msg + ")"
 	}
 	if this.Err != nil {
-		m += ": " + this.Err.Error()
+		m += " - " + this.Err.Error()
 	}
 	return m
 }
 
+// IsJSONUnmarshalError checks if an error is the `JSONUnmarshalError` type.
 func IsJSONUnmarshalError(e error) bool {
 	_, ok := e.(JSONUnmarshalError)
 	return ok
 }
 
+// MismatchError is used in situations where multiple provided values do not match each other.
 type MismatchError struct {
 	Msg string
 }
 
+// Error for MismatchError returns a string in the format:
+//
+//	Mismatched values - <msg>
 func (this MismatchError) Error() string {
 	m := "Mismatched values"
 	if this.Msg != "" {
-		m += ": " + this.Msg
+		m += " - " + this.Msg
 	}
 	return m
 }
 
+// IsMismatchError checks if an error is the `MismatchError` type.
 func IsMismatchError(e error) bool {
 	_, ok := e.(MismatchError)
 	return ok
@@ -140,9 +148,10 @@ type MissingError struct {
 }
 
 // Error for MissingError returns a string in the format:
-//	missing value: <msg>
+//
+//	Missing value - <msg>
 func (this MissingError) Error() string {
-	return "Missing value: " + this.Msg
+	return "Missing value - " + this.Msg
 }
 
 // IsMissingError checks if an error is the `MissingError` type.
@@ -151,11 +160,15 @@ func IsMissingError(e error) bool {
 	return ok
 }
 
+// NilError is for situations where variables are nil.
 type NilError struct {
 	Msg string
 	Err error
 }
 
+// Error for NilError returns a string in the format:
+//
+//	Nil error (<msg>) - <error>
 func (this NilError) Error() string {
 	m := "Nil error"
 	if this.Msg != "" {
@@ -167,6 +180,7 @@ func (this NilError) Error() string {
 	return m
 }
 
+// IsNilError checks if an error is the `NilError` type.
 func IsNilError(e error) bool {
 	_, ok := e.(NilError)
 	return ok
@@ -184,15 +198,15 @@ type NotFoundError struct {
 
 // Error for NotFoundError returns a string in one of the following formats:
 //
-//	- Entity not found: <error string>
-//	- '<kind>' entity not found: <error string>
+//	- Entity not found - <error string>
+//	- '<kind>' entity not found - <error string>
 func (this NotFoundError) Error() string {
 	m := "Entity not found"
 	if this.Kind != "" {
 		m = fmt.Sprintf("'%v' entity not found", this.Kind)
 	}
 	if this.Err != nil {
-		m += ": " + this.Err.Error()
+		m += " - " + this.Err.Error()
 	}
 	return m
 }
