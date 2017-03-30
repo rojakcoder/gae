@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -488,11 +489,13 @@ func SaveCacheEntity(ctx context.Context, m Model) error {
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
 func WriteJSON(w http.ResponseWriter, m Model, status int) {
-	if err := json.NewEncoder(w).Encode(m); err != nil {
-		WriteRespErr(w, http.StatusInternalServerError, err)
+	j, e := json.Marshal(m)
+	if e != nil {
+		WriteRespErr(w, http.StatusInternalServerError, e)
 		return
 	}
 	w.WriteHeader(status)
+	fmt.Fprintf(w, string(j))
 }
 
 // WriteJSONColl writes a slice of Model instances as JSON string into the
@@ -506,25 +509,31 @@ func WriteJSON(w http.ResponseWriter, m Model, status int) {
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
 func WriteJSONColl(w http.ResponseWriter, m []Model, status int, cursor string) {
-	if err := json.NewEncoder(w).Encode(m); err != nil {
-		WriteRespErr(w, http.StatusInternalServerError, err)
-	} else {
-		w.Header().Add(HEADER_CURSOR, cursor)
-		w.WriteHeader(status)
+	j, e := json.Marshal(m)
+	if e != nil {
+		WriteRespErr(w, http.StatusInternalServerError, e)
+		return
 	}
+	w.Header().Add(HEADER_CURSOR, cursor)
+	w.WriteHeader(status)
+	fmt.Fprintf(w, string(j))
 }
 
 // WriteLogRespErr logs the error string and then writes it to the response
 // header (HEADER_ERROR) before setting the response code.
 func WriteLogRespErr(c context.Context, w http.ResponseWriter, code int, e error) {
-	log.Errorf(c, e.Error())
-	w.Header().Add(HEADER_ERROR, e.Error())
+	if e != nil {
+		log.Errorf(c, e.Error())
+		w.Header().Add(HEADER_ERROR, e.Error())
+	}
 	w.WriteHeader(code)
 }
 
 // WriteRespErr writes the error string to the response header (HEADER_ERROR)
 // before setting the response code.
 func WriteRespErr(w http.ResponseWriter, code int, e error) {
-	w.Header().Set(http.CanonicalHeaderKey(HEADER_ERROR), e.Error())
+	if e != nil {
+		w.Header().Set(http.CanonicalHeaderKey(HEADER_ERROR), e.Error())
+	}
 	w.WriteHeader(code)
 }

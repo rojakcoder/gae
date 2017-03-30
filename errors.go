@@ -10,19 +10,21 @@ type DuplicateError struct {
 
 // Error for DuplicateError returns
 //
+//	Duplicate value
+//
+// or
+//
 //	Duplicate value for <Name>
 //
 // if the `Name` field is set. The `Msg` field is appended to this message if
 // set, separated by a hyphen.
 func (this DuplicateError) Error() string {
-	m := ""
+	m := "Duplicate value"
 	if this.Name != "" {
 		m = "Duplicate value for " + this.Name
 	}
 	if this.Msg != "" {
-		if len(m) > 0 {
-			m += " - "
-		}
+		m += " - "
 		m += this.Msg
 	}
 	return m
@@ -42,19 +44,21 @@ type InsufficientError struct {
 
 // Error for InsufficientError returns
 //
+//	Insufficient value
+//
+// or
+//
 //	Insufficient value for <Name>
 //
 // if the `Name` field is set. The `Msg` field is appended to this message if
 // set, separated by a hyphen.
 func (this InsufficientError) Error() string {
-	m := ""
+	m := "Insufficient value"
 	if this.Name != "" {
 		m = "Insufficient value for " + this.Name
 	}
 	if this.Msg != "" {
-		if len(m) > 0 {
-			m += " - "
-		}
+		m += " - "
 		m += this.Msg
 	}
 	return m
@@ -147,11 +151,21 @@ type MissingError struct {
 	Msg string
 }
 
-// Error for MissingError returns a string in the format:
+// Error for MissingError returns:
+//
+//	Missing value
+//
+// or
 //
 //	Missing value - <msg>
+//
+// if the `Msg` field is set.
 func (this MissingError) Error() string {
-	return "Missing value - " + this.Msg
+	m := "Missing value"
+	if this.Msg != "" {
+		m += " - " + this.Msg
+	}
+	return m
 }
 
 // IsMissingError checks if an error is the `MissingError` type.

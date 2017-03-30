@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.14.0] - 2017-03-30
+
+### Changed
+- Improved the way the JSON structure is returned in the response. Previously
+writing a response will *always* invoke a warning from the server logs
+"http: multiple response.WriteHeader calls"
+
 ## [0.13.0] - 2017-02-15
 
 ### Added

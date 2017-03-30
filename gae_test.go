@@ -458,8 +458,8 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{InvalidError{}, "Invalid value: "},
-		{InvalidError{"Currency expected"}, "Invalid value: Currency expected"},
+		{InvalidError{}, "Invalid value ()"},
+		{InvalidError{"Currency expected"}, "Invalid value (Currency expected)"},
 	}
 	for _, tt := range ieTests {
 		if tt.e.Error() != tt.want {
@@ -474,12 +474,15 @@ func TestErrors(t *testing.T) {
 	}{
 		{JSONUnmarshalError{}, "Unable to parse JSON"},
 		{JSONUnmarshalError{Msg: "empty string"}, "Unable to parse JSON (empty string)"},
-		{JSONUnmarshalError{"numbers only", errors.New("Numbers only")}, "Unable to parse JSON (numbers only): Numbers only"},
+		{JSONUnmarshalError{"numbers only", errors.New("Numbers only")}, "Unable to parse JSON (numbers only) - Numbers only"},
 	}
 	for _, tt := range jmeTests {
 		if tt.e.Error() != tt.want {
 			t.Errorf("Error string for JSONMarshalError is different.\n - Expected: %v\n -      Got: %v\n", tt.want, tt.e.Error())
 		}
+	}
+	if !IsJSONUnmarshalError(jmeTests[0].e) {
+		t.Errorf("expect IsJSONUnmarshalError to return true; got false")
 	}
 
 	//cover MissingError
@@ -487,8 +490,8 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{MissingError{}, "Missing value: "},
-		{MissingError{"key"}, "Missing value: key"},
+		{MissingError{}, "Missing value"},
+		{MissingError{"key"}, "Missing value - key"},
 	}
 	for _, tt := range meTests {
 		if tt.e.Error() != tt.want {
@@ -678,9 +681,9 @@ func TestServerFuncs(t *testing.T) {
 	if w.Code != 200 {
 		t.Errorf("expected response code %v; got %v", 200, w.Code)
 	}
-	json := "{\"id\":null,\"batch\":0,\"Expiry\":\"\",\"Name\":\"\"}\n"
+	json := "{\"id\":null,\"batch\":0,\"Expiry\":\"\",\"Name\":\"\"}"
 	if string(w.Body.Bytes()) != json {
-		t.Errorf("expected JSON output:\n - %v\ngot:\n - %v", json, string(w.Body.Bytes()))
+		t.Errorf("expected JSON output:\n - %v(%d)\ngot:\n - %v(%d)", json, len(json), string(w.Body.Bytes()), len(string(w.Body.Bytes())))
 	}
 
 	w = httptest.NewRecorder()
@@ -710,9 +713,9 @@ func TestServerFuncs(t *testing.T) {
 	if w.Code != 200 {
 		t.Errorf("expected response code %v; got %v", 200, w.Code)
 	}
-	json = "[{\"id\":null,\"batch\":0,\"Expiry\":\"\",\"Name\":\"\"}]\n"
+	json = "[{\"id\":null,\"batch\":0,\"Expiry\":\"\",\"Name\":\"\"}]"
 	if string(w.Body.Bytes()) != json {
-		t.Errorf("expected JSON output:\n - %v\ngot:\n - %v", json, string(w.Body.Bytes()))
+		t.Errorf("expected JSON output:\n - %v(%d)\ngot:\n - %v(%d)", json, len(json), string(w.Body.Bytes()), len(string(w.Body.Bytes())))
 	}
 	header, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HEADER_CURSOR)]
 	if !hasHeader {
