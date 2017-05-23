@@ -170,6 +170,7 @@ type Page struct {
 	Path        string
 	Param       map[string]string
 	Handler     func(http.ResponseWriter, *http.Request)
+	Template    string
 }
 
 // AddVar is a convenient method to adding values into the Dictionary map.

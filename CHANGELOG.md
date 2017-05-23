@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.15.0] - 2017-05-23
+
+### Added
+- Added a `Template` property to Page.
+
 ## [0.14.0] - 2017-03-30
 
 ### Changed
