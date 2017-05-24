@@ -192,8 +192,8 @@ func (this *Page) AddVar(word, meaning string) {
 //
 // Note that if dictionary also contains the same keys ("Title" and
 // "Dictionary"), they will be overridden.
-func (this *Page) ToDictionary() map[string]string {
-	var dict = make(map[string]string)
+func (this *Page) ToDictionary() map[string]interface{} {
+	var dict = make(map[string]interface{})
 	//copy all data over
 	for k, v := range this.Dictionary {
 		dict[k] = v

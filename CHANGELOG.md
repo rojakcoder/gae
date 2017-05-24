@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.16.0] - 2017-05-24
+
+### Changed
+- Changed the dictionary to use interface type instead of string.
+
 ## [0.15.0] - 2017-05-23
 
 ### Added
