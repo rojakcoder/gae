@@ -75,7 +75,8 @@ type DateTime struct {
 }
 
 // Equal checks whether the two timestamps are referring to the same moment,
-// taking into account timezone differences.
+// taking into account timezone differences while ignoring sub-second
+// differences.
 func (this *DateTime) Equal(that DateTime) bool {
 	return this.Time.Truncate(time.Second).Equal(that.Time.Truncate(time.Second))
 }

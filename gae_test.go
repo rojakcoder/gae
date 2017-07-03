@@ -3,6 +3,7 @@ package gae
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -307,6 +308,65 @@ func TestEquality(t *testing.T) {
 	if p1 == p2 {
 		t.Error("p1 should not be equal to p2 because the memory locations of Type are different even though values are the same")
 	}
+}
+
+func ExampleDateTime_Equal_dateTime() {
+	t1 := time.Date(2017, time.July, 3, 17, 59, 59, 1, time.Local)
+	t2 := time.Date(2017, time.July, 3, 9, 59, 59, 59, time.UTC)
+	ta := DateTime{t1}
+	tb := DateTime{t2}
+	if ta.Equal(tb) {
+		fmt.Println("Equal")
+	} else {
+		fmt.Println("Not equal")
+	}
+	// Output: Equal
+}
+
+func ExampleDateTime_Equal_time() {
+	t1 := time.Date(2017, time.July, 3, 17, 59, 59, 1, time.Local)
+	t2 := time.Date(2017, time.July, 3, 9, 59, 59, 59, time.UTC)
+	if t1.Equal(t2) {
+		fmt.Println("Equal")
+	} else {
+		fmt.Println("Not equal")
+	}
+	// Output: Not equal
+}
+
+func ExampleDateTime_MarshalJSON_dateTime() {
+	t1 := DateTime{time.Time{}}
+	js, _ := t1.MarshalJSON()
+	fmt.Println(string(js))
+	// Output: ""
+}
+
+func ExampleDateTime_MarshalJSON_time() {
+	//Compare to the output of time.Time
+	t1 := time.Time{}
+	js, _ := json.Marshal(t1.Format(time.RFC3339))
+	fmt.Println(string(js))
+	// Output: "0001-01-01T00:00:00Z"
+}
+
+func ExampleDateTime_String_dateTime() {
+	//To create a new DateTime instance
+	t1 := DateTime{time.Time{}}
+	fmt.Println(t1.String())
+	// Output: 0001-01-01T00:00:00Z
+}
+
+func ExampleDateTime_String_time() {
+	//Compare to the output of time.Time
+	t1 := time.Time{}
+	fmt.Println(t1.String())
+	// Output: 0001-01-01 00:00:00 +0000 UTC
+}
+
+func ExampleNewDateTime() {
+	t, _ := NewDateTime("2017-07-03T09:44:00+08:00")
+	fmt.Println(t.String())
+	// Output: 2017-07-03T09:44:00+08:00
 }
 
 func TestDateTime(t *testing.T) {
