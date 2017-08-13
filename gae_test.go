@@ -29,7 +29,7 @@ func (this Dummy) MakeKey(ctx context.Context) *datastore.Key {
 
 func (this Dummy) SetKey(key *datastore.Key) error { return nil }
 
-func (this Dummy) Update(m Model) error { return nil }
+func (this Dummy) Update(m Datastorer) error { return nil }
 
 func (this Dummy) ValidationError() []string { return make([]string, 0) }
 
@@ -59,16 +59,20 @@ func (this *Ointment) Presave() {
 
 func (this *Ointment) SetKey(key *datastore.Key) error {
 	if key == nil {
-		return ErrNilKey
+		return NilError{
+			Msg: "key is nil",
+		}
 	}
 	this.KeyID = key
 	return nil
 }
 
-func (this *Ointment) Update(m Model) error {
+func (this *Ointment) Update(m Datastorer) error {
 	that, ok := m.(*Ointment)
 	if !ok {
-		return ErrWrongType
+		return MismatchError{
+			Msg: "provided parameter is not of type *Ointment",
+		}
 	}
 	this.Batch = that.Batch
 	this.Expiry = that.Expiry
@@ -271,10 +275,10 @@ func TestSaveLoadDelete(t *testing.T) {
 		t.Error("Retrieved Ointment.Name is different from saved")
 	}
 
-	DeleteByID(ctx, ReadID(m2))
+	DeleteByID(ctx, m2.Key().Encode())
 
 	o3 := Ointment{}
-	if err := LoadByID(ctx, ReadID(m2), &o3); err == nil {
+	if err := LoadByID(ctx, m2.Key().Encode(), &o3); err == nil {
 		t.Error("Expected error from not finding entity. Should be deleted already")
 	}
 }
@@ -335,7 +339,7 @@ func ExampleDateTime_Equal_time() {
 }
 
 func ExampleDateTime_MarshalJSON_dateTime() {
-	t1 := DateTime{time.Time{}}
+	t1 := DateTime{}
 	js, _ := t1.MarshalJSON()
 	fmt.Println(string(js))
 	// Output: ""
@@ -351,7 +355,7 @@ func ExampleDateTime_MarshalJSON_time() {
 
 func ExampleDateTime_String_dateTime() {
 	//To create a new DateTime instance
-	t1 := DateTime{time.Time{}}
+	t1 := DateTime{}
 	fmt.Println(t1.String())
 	// Output: 0001-01-01T00:00:00Z
 }
@@ -376,14 +380,14 @@ func TestDateTime(t *testing.T) {
 		}
 	}
 
-	t1 := DateTime{time.Time{}}
+	t1 := DateTime{}
 	j1, _ := t1.MarshalJSON()
 
 	if string(j1) != `""` {
 		t.Errorf("expected empty string for zeroed time; got %v", string(j1))
 	}
 
-	t1a := DateTime{time.Time{}}
+	t1a := DateTime{}
 	err := t1a.UnmarshalJSON(([]byte)(`""`))
 	if err != nil {
 		t.Errorf("error unmarshalling time from empty quotes \"\": %v", err)
@@ -477,11 +481,6 @@ func TestCoverage(t *testing.T) {
 		t.Error("expected LoadByKey to fail with invalid ID:", "inavlid-key")
 	}
 
-	//cover ReadID
-	if ReadID(&Ointment{}) != "" {
-		t.Error("expected empty string for nil key")
-	}
-
 	//cover Save
 	if err := Save(ctx, Dummy{}); err == nil {
 		t.Error("expected error from saving Dummy")
@@ -503,9 +502,9 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{EntityNotFoundError{}, "entity not found"},
-		{EntityNotFoundError{Kind: "Assignment"}, "Assignment entity not found"},
-		{EntityNotFoundError{"Deadline", errors.New("overdue")}, "Deadline entity not found: overdue"},
+		{NotFoundError{}, "entity not found"},
+		{NotFoundError{Kind: "Assignment"}, "'Assignment' entity not found"},
+		{NotFoundError{"Deadline", errors.New("overdue")}, "'Deadline' entity not found - overdue"},
 	}
 	for _, tt := range enfeTests {
 		if tt.e.Error() != tt.want {
@@ -564,8 +563,8 @@ func TestErrors(t *testing.T) {
 		e    error
 		want string
 	}{
-		{ValidityError{}, "validation error: "},
-		{ValidityError{"Name is required"}, "validation error: Name is required"},
+		{ValidityError{}, "validation error - "},
+		{ValidityError{"Name is required"}, "validation error - Name is required"},
 	}
 	for _, tt := range veTests {
 		if tt.e.Error() != tt.want {
@@ -754,9 +753,9 @@ func TestServerFuncs(t *testing.T) {
 	if len(w.Body.Bytes()) != 0 {
 		t.Errorf("expected error response body to be empty")
 	}
-	_, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
+	_, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HeaderError)]
 	if !hasHeader {
-		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
+		t.Errorf("expected error response to contain header %v", HeaderError)
 	}
 
 	//test WriteJSONColl
@@ -764,7 +763,7 @@ func TestServerFuncs(t *testing.T) {
 	oints := []Ointment{
 		Ointment{},
 	}
-	coll := make([]Model, len(oints))
+	coll := make([]Datastorer, len(oints))
 	for k, v := range oints {
 		coll[k] = &v
 	}
@@ -777,12 +776,12 @@ func TestServerFuncs(t *testing.T) {
 	if string(w.Body.Bytes()) != json {
 		t.Errorf("expected JSON output:\n - %v(%d)\ngot:\n - %v(%d)", json, len(json), string(w.Body.Bytes()), len(string(w.Body.Bytes())))
 	}
-	header, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HEADER_CURSOR)]
+	header, hasHeader := w.HeaderMap[http.CanonicalHeaderKey(HeaderCursor)]
 	if !hasHeader {
-		t.Errorf("expected response to contain header %v", HEADER_CURSOR)
+		t.Errorf("expected response to contain header %v", HeaderCursor)
 	}
 	if len(header) != 1 {
-		t.Errorf("expected response header %v to contain only %v value; got %v", HEADER_CURSOR, 1, len(header))
+		t.Errorf("expected response header %v to contain only %v value; got %v", HeaderCursor, 1, len(header))
 	}
 	if header[0] != cursor {
 		t.Errorf("expected response header value %v; got %v", cursor, header)
@@ -790,7 +789,7 @@ func TestServerFuncs(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	dums := []Dummy{Dummy{}}
-	coll = make([]Model, len(dums))
+	coll = make([]Datastorer, len(dums))
 	for k, v := range dums {
 		coll[k] = &v
 	}
@@ -801,13 +800,13 @@ func TestServerFuncs(t *testing.T) {
 	if len(w.Body.Bytes()) != 0 {
 		t.Errorf("expected error response body to be empty")
 	}
-	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
+	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HeaderError)]
 	if !hasHeader {
-		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
+		t.Errorf("expected error response to contain header %v", HeaderError)
 	}
-	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_CURSOR)]
+	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HeaderCursor)]
 	if hasHeader {
-		t.Errorf("expected error response to NOT contain header %v", HEADER_CURSOR)
+		t.Errorf("expected error response to NOT contain header %v", HeaderCursor)
 	}
 	//test WriteLogRespErr
 	c1 := appengine.NewContext(r1)
@@ -819,9 +818,9 @@ func TestServerFuncs(t *testing.T) {
 	if len(w.Body.Bytes()) != 0 {
 		t.Errorf("expected error response body to be empty")
 	}
-	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HEADER_ERROR)]
+	_, hasHeader = w.HeaderMap[http.CanonicalHeaderKey(HeaderError)]
 	if !hasHeader {
-		t.Errorf("expected error response to contain header %v", HEADER_ERROR)
+		t.Errorf("expected error response to contain header %v", HeaderError)
 	}
 }
 
@@ -888,7 +887,7 @@ func TestSession(t *testing.T) {
 	verified = CheckSession(ctx, s4.Value)
 	testCheckSession("CheckSession (valid session from store)", true, verified)
 
-	k5 := datastore.NewKey(ctx, KIND_SESSION, "", 12, nil)
+	k5 := datastore.NewKey(ctx, KindSession, "", 12, nil)
 	verified = CheckSession(ctx, k5.Encode())
 	testCheckSession("CheckSession (non-existing session)", false, verified)
 	item := &memcache.Item{

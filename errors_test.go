@@ -66,14 +66,22 @@ func TestErrors2(t *testing.T) {
 	}
 
 	eg1 := NotFoundError{}
-	runtest(t, "NotFoundError.Error - basic", "Entity not found", eg1.Error())
+	runtest(t, "NotFoundError.Error - basic", "entity not found", eg1.Error())
 	eg2 := NotFoundError{Kind: "Group"}
 	runtest(t, "NotFoundError.Error - with kind", "'Group' entity not found", eg2.Error())
 	eg3 := NotFoundError{Err: ee1}
-	runtest(t, "NotFoundError.Error - with error", "Entity not found - Missing value", eg3.Error())
+	runtest(t, "NotFoundError.Error - with error", "entity not found - Missing value", eg3.Error())
 	eg4 := NotFoundError{Err: ee1, Kind: "Group"}
 	runtest(t, "NotFoundError.Error - with msg and error", "'Group' entity not found - Missing value", eg4.Error())
 	if !IsNotFoundError(eg4) {
 		t.Errorf("expect IsNotFoundError to return true; got false")
+	}
+
+	eh1 := ValidityError{}
+	runtest(t, "ValidityError.Error - basic", "validation error - ", eh1.Error())
+	eh2 := ValidityError{"invalid value"}
+	runtest(t, "ValidityError.Error - with msg", "validation error - invalid value", eh2.Error())
+	if !IsValidityError(eh2) {
+		t.Errorf("expect IsValidityError to return true; got false")
 	}
 }

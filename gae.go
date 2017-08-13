@@ -19,51 +19,20 @@ import (
 )
 
 const (
-	// HEADER_CURSOR is the header for holding the pagination cursor.
-	HEADER_CURSOR = "x-cursor"
-	// HEADER_ERROR is the header for holding error description. This is in all
+	// HeaderCursor is the header for holding the pagination cursor.
+	HeaderCursor = "x-cursor"
+	// HeaderError is the header for holding error description. This is in all
 	// lower-case because it is following the specifications and App Engine
 	// changes it to all lowercase no matter the original casing.
-	HEADER_ERROR = "x-error"
-	// KIND_SESSION is the kind of the entity stored in the datastore for
+	HeaderError = "x-error"
+	// KindSession is the kind of entity stored in the Datastore for
 	// maintaining session.
-	KIND_SESSION = "GAESession"
+	KindSession = "GAESession"
 )
 
 var (
-	// ErrMismatch is returned when a PUT request specifies different values for
-	// the ID in the path parameter and the payload model.
-	//
-	// Deprecated - replaced by MismatchError
-	ErrMismatch = errors.New("mismatched values")
-
-	// ErrMultipleEntities is returned when a Datastore retrieval
-	// finds more than 1 entity with the specified criteria.
-	//
-	// Deprecated - replaced by DuplicateError
-	ErrMultipleEntities = errors.New("multiple entities retrieved when only 1 is expected")
-
-	// ErrNilKey is returned by SetKey methods when the parameter is nil.
-	//
-	// Deprecated - replaced by NilError
-	ErrNilKey = errors.New("key is nil")
-
-	// ErrMissingID is returned when a request does not provide an ID.
-	//
-	// Deprecated - replaced by MissingError
-	ErrMissingID = errors.New("expected ID not specified")
-
-	// ErrUnexpectedID is returned when a POST request includes the ID property in
-	// the payload model when it is not supposed to.
-	//
-	// Deprecated - replaced by InvalidError
-	ErrUnexpectedID = errors.New("ID is specified when it is not expected")
-
-	// ErrWrongType is returned when the provided function argument is
-	// incompatible from what is expected.
-	//
-	// Deprecated - replaced by MismatchError
-	ErrWrongType = errors.New("provided type is different from expected")
+	// ErrUnauth is returned when the request is not authenticated.
+	ErrUnauth = errors.New("unauthenticated")
 )
 
 // DateTime is an auxillary struct for time.Time specifically for the purpose
@@ -77,18 +46,20 @@ type DateTime struct {
 // Equal checks whether the two timestamps are referring to the same moment,
 // taking into account timezone differences while ignoring sub-second
 // differences.
-func (this *DateTime) Equal(that DateTime) bool {
-	return this.Time.Truncate(time.Second).Equal(that.Time.Truncate(time.Second))
+func (d1 *DateTime) Equal(d2 DateTime) bool {
+	return d1.Truncate(time.Second).Equal(d2.Truncate(time.Second))
 }
 
 // MarshalJSON converts the time into a format like
+//
 //  "2006-01-02T15:04:05+07:00"
+//
 // or an empty string if `time.Time.IsZero()`
-func (this *DateTime) MarshalJSON() ([]byte, error) {
-	if this.Time.IsZero() {
+func (d *DateTime) MarshalJSON() ([]byte, error) {
+	if d.IsZero() {
 		return json.Marshal("")
 	}
-	return json.Marshal(this.Time.Format(time.RFC3339))
+	return json.Marshal(d.Format(time.RFC3339))
 }
 
 // String for DateTime returns the time in this format
@@ -97,18 +68,20 @@ func (this *DateTime) MarshalJSON() ([]byte, error) {
 //	e.g. 2006-01-02T15:04:05+07:00
 //
 // In other words, the output is formatted using `time.RFC3339`
-func (this *DateTime) String() string {
-	return this.Time.Format(time.RFC3339)
+func (d *DateTime) String() string {
+	return d.Format(time.RFC3339)
 }
 
 // UnmarshalJSON expects the input to a string like
+//
 //  "2006-01-02T15:04:05+07:00"
+//
 // to convert into a time.Time struct wrapped inside DateTime. It is able to
 // understand an empty string ("") and convert it to a zeroed `time.Time`
 // instance.
-func (this *DateTime) UnmarshalJSON(input []byte) error {
+func (d *DateTime) UnmarshalJSON(input []byte) error {
 	if bytes.Equal([]byte(`""`), input) { //i.e. ""
-		this.Time = time.Time{}
+		d = &DateTime{}
 		return nil
 	}
 	var s string
@@ -119,7 +92,7 @@ func (this *DateTime) UnmarshalJSON(input []byte) error {
 	if err != nil {
 		return err
 	}
-	this.Time = t
+	d.Time = t
 	return nil
 }
 
@@ -142,27 +115,6 @@ func NewDateTimeNow() DateTime {
 	return DateTime{time.Now()}
 }
 
-// EntityNotFoundError is for Datastore retrieval not finding the entity.
-//
-// Deprecated - replaced by NotFoundError
-type EntityNotFoundError struct {
-	Kind string
-	Err  error
-}
-
-// Error for EntityNotFoundError returns a string in the format:
-//  <kind> entity not found: <error string>
-func (this EntityNotFoundError) Error() string {
-	e := "entity not found"
-	if this.Kind != "" {
-		e = this.Kind + " entity not found"
-	}
-	if this.Err != nil {
-		e += ": " + this.Err.Error()
-	}
-	return e
-}
-
 // Page describes the contents for a page. It is to be used with templates.
 type Page struct {
 	Title       string
@@ -179,11 +131,11 @@ type Page struct {
 // This method performs the additional check for initialization of the
 // Dictionary map so that the calling code has the option of not initializing
 // the map.
-func (this *Page) AddVar(word, meaning string) {
-	if this.Dictionary == nil {
-		this.Dictionary = make(map[string]string)
+func (p *Page) AddVar(word, meaning string) {
+	if p.Dictionary == nil {
+		p.Dictionary = make(map[string]string)
 	}
-	this.Dictionary[word] = meaning
+	p.Dictionary[word] = meaning
 }
 
 // ToDictionary creates a map with the existing values in the `Dictionary`
@@ -193,45 +145,35 @@ func (this *Page) AddVar(word, meaning string) {
 //
 // Note that if dictionary also contains the same keys ("Title" and
 // "Dictionary"), they will be overridden.
-func (this *Page) ToDictionary() map[string]interface{} {
+func (p *Page) ToDictionary() map[string]interface{} {
 	var dict = make(map[string]interface{})
 	//copy all data over
-	for k, v := range this.Dictionary {
+	for k, v := range p.Dictionary {
 		dict[k] = v
 	}
 	//copy title and description over
-	dict["Title"] = this.Title
-	dict["Description"] = this.Description
+	dict["Title"] = p.Title
+	dict["Description"] = p.Description
 	return dict
 }
 
-// ValidityError is for errors in model validation.
-type ValidityError struct {
-	Msg string
-}
-
-// Error for ValidityError returns a string in the format:
-//	Validation error: <error string>
-func (this ValidityError) Error() string {
-	return "validation error: " + this.Msg
-}
-
-// Model is an interface that all application models must implement
-// in order to be able to save to and load from the Datastore
-//
-// The ID method is for converting a *datastore.Key field into a string.
+// Datastorer is an interface that all application models must implement
+// in order to be able to save to and load from the Datastore.
 //
 // The MakeKey method is for getting the Key of the entity (if present) or
 // make a new one for saving (if absent).
 //
+// SetKey is used to assign values to other properties that are not stored as
+// values of the entity, but as either the string/numeric ID or the parent of
+// the Key.
+//
 // ValidationError returns a slice of string with the fields that do not meet
 // the validation rules. This is used by IsValid to determine the validity of
 // the model.
-type Model interface {
+type Datastorer interface {
 	Key() *datastore.Key
 	MakeKey(context.Context) *datastore.Key
 	SetKey(*datastore.Key) error
-	Update(Model) error
 	ValidationError() []string
 }
 
@@ -256,15 +198,14 @@ type Session struct {
 	Expiration time.Time      `datastore:",noindex"`
 }
 
-// Valid for Session returns true if the Expiration field is after the current
-// time.
+// Valid returns true if the Expiration field is after the current time.
 //
 // If the value is not set (i.e. `IsZero`) then the session is also not valid.
-func (this *Session) Valid() bool {
-	if this.Expiration.IsZero() {
+func (s *Session) Valid() bool {
+	if s.Expiration.IsZero() {
 		return false
 	}
-	if this.Expiration.Before(time.Now()) {
+	if s.Expiration.Before(time.Now()) {
 		return false
 	}
 	return true
@@ -323,7 +264,7 @@ func MakeSessionCookie(ctx context.Context, name string, obj interface{},
 			s.Value = string(js)
 		}
 	}
-	key, err := datastore.Put(ctx, datastore.NewIncompleteKey(ctx, KIND_SESSION, nil), s)
+	key, err := datastore.Put(ctx, datastore.NewIncompleteKey(ctx, KindSession, nil), s)
 	if err != nil {
 		return nil, err
 	}
@@ -343,6 +284,8 @@ func MakeSessionCookie(ctx context.Context, name string, obj interface{},
 
 // DeleteByID removes an entity from the Datastore using the opaque
 // representation of the key.
+//
+// DeleteByKey is called after conversion of the ID.
 func DeleteByID(ctx context.Context, id string) error {
 	key, err := datastore.DecodeKey(id)
 	if err != nil {
@@ -352,12 +295,16 @@ func DeleteByID(ctx context.Context, id string) error {
 }
 
 // DeleteByKey removes an entity from the Datastore.
+//
+// This is just an alias to:
+//
+//	datastore.Delete(ctx, k)
 func DeleteByKey(ctx context.Context, k *datastore.Key) error {
 	return datastore.Delete(ctx, k)
 }
 
-// IsValid checks if a model has satisfied its validation rules.
-func IsValid(m Model) bool {
+// IsValid checks if a Datastorer has satisfied its validation rules.
+func IsValid(m Datastorer) bool {
 	if len(m.ValidationError()) > 0 {
 		return false
 	}
@@ -366,7 +313,9 @@ func IsValid(m Model) bool {
 
 // LoadByID retrieves a model from the Datastore using the opaque
 // representation of the key.
-func LoadByID(ctx context.Context, id string, m Model) error {
+//
+// LoadByKey is called after conversion of the ID.
+func LoadByID(ctx context.Context, id string, m Datastorer) error {
 	key, err := datastore.DecodeKey(id)
 	if err != nil {
 		return err
@@ -375,9 +324,16 @@ func LoadByID(ctx context.Context, id string, m Model) error {
 }
 
 // LoadByKey retrieves a model from the Datastore.
-func LoadByKey(ctx context.Context, k *datastore.Key, m Model) error {
+//
+// The SetKey method of Datastore is called to set the key (and any other
+// properties determined by the implementation) after retrieving from the
+// Datastore.
+func LoadByKey(ctx context.Context, k *datastore.Key, m Datastorer) error {
+	if e := datastore.Get(ctx, k, m); e != nil {
+		return e
+	}
 	m.SetKey(k)
-	return datastore.Get(ctx, k, m)
+	return nil
 }
 
 // PrepPageParams parses the query parameters to get the pagination cursor and
@@ -397,22 +353,11 @@ func PrepPageParams(params url.Values) (limit int, cursor string) {
 	return
 }
 
-// ReadID reads the model's Key and returns the Key in a base 64
-// representation.
-//
-// If the Key is nil, an empty string is returned.
-func ReadID(m Model) string {
-	if m.Key() == nil {
-		return ""
-	}
-	return m.Key().Encode()
-}
-
 // RetrieveEntityByID attempts to retrieve the entity from Memcache before
 // retrieving from the Datastore.
 //
 // If the entity is retrieved from the Datastore, it is placed into Memcache.
-func RetrieveEntityByID(ctx context.Context, id string, m Model) error {
+func RetrieveEntityByID(ctx context.Context, id string, m Datastorer) error {
 	_m, err := memcache.Get(ctx, id) //read from cache
 	if err == nil {                  //i.e. a hit
 		e := json.Unmarshal(_m.Value, m)
@@ -434,20 +379,27 @@ func RetrieveEntityByID(ctx context.Context, id string, m Model) error {
 	return nil
 }
 
-// RetrieveEntityByKey does the same thing as `RetrieveEntityByID`.
-func RetrieveEntityByKey(ctx context.Context, key *datastore.Key, m Model) error {
+// RetrieveEntityByKey does the same thing as RetrieveEntityByID.
+//
+// It converts the Key to a string before proxying the invocation to
+// RetrieveEntityByID
+func RetrieveEntityByKey(ctx context.Context, key *datastore.Key, m Datastorer) error {
 	return RetrieveEntityByID(ctx, key.Encode(), m)
 }
 
-// Save checks for validity of model m prior to saving to the Datastore.
+// Save checks for validity of the model prior to saving to the Datastore.
 //
 // Save also invokes the Presave method of m if it is set to perform any
 // pre-saving actions prior to updating the entity in the Datastore.
 //
+// The validity check is performed before the pre-saving operation.
+//
 // After saving, the key is assigned to m.
-func Save(ctx context.Context, m Model) error {
+func Save(ctx context.Context, m Datastorer) error {
 	if !IsValid(m) {
-		return ValidityError{strings.Join(m.ValidationError(), ", ")}
+		return ValidityError{
+			Msg: strings.Join(m.ValidationError(), ", "),
+		}
 	}
 	if presaver, ok := m.(Presaver); ok {
 		presaver.Presave()
@@ -467,7 +419,7 @@ func Save(ctx context.Context, m Model) error {
 //
 // After saving the entity, it is then put into Memcache. Any error from
 // Memcache is ignored.
-func SaveCacheEntity(ctx context.Context, m Model) error {
+func SaveCacheEntity(ctx context.Context, m Datastorer) error {
 	if err := Save(ctx, m); err != nil {
 		return err
 	}
@@ -481,16 +433,12 @@ func SaveCacheEntity(ctx context.Context, m Model) error {
 	return nil
 }
 
-// WriteJSON writes an instance of Model as a JSON string into the response
+// WriteJSON writes an instance of Datastorer as a JSON string into the response
 // body and sets the status code as specified.
-//
-// Due to the nature of the language, the slice of the implementing structs
-// cannot be passed to this function as-is - it needs to be changed into a
-// slice of Model explicity. E.g.
 //
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
-func WriteJSON(w http.ResponseWriter, m Model, status int) {
+func WriteJSON(w http.ResponseWriter, m Datastorer, status int) {
 	j, e := json.Marshal(m)
 	if e != nil {
 		WriteRespErr(w, http.StatusInternalServerError, e)
@@ -500,42 +448,46 @@ func WriteJSON(w http.ResponseWriter, m Model, status int) {
 	fmt.Fprintf(w, string(j))
 }
 
-// WriteJSONColl writes a slice of Model instances as JSON string into the
+// WriteJSONColl writes a slice of Datastorer instances as JSON string into the
 // response body and sets the status code as specified.
 //
-//	coll := make([]gae.Model, len(users))
+// Due to the nature of the language, the slice of the implementing structs
+// cannot be passed to this function as-is - it needs to be changed into a
+// slice of Datastorer explicity. E.g.
+//
+//	coll := make([]gae.Datastorer, len(users))
 //	for k, v := range users {
 //		coll[k] = &v
 //	}
 //
 // If there is any error writing the JSON, a 500 Internal Server error is
 // returned.
-func WriteJSONColl(w http.ResponseWriter, m []Model, status int, cursor string) {
+func WriteJSONColl(w http.ResponseWriter, m []Datastorer, status int, cursor string) {
 	j, e := json.Marshal(m)
 	if e != nil {
 		WriteRespErr(w, http.StatusInternalServerError, e)
 		return
 	}
-	w.Header().Add(HEADER_CURSOR, cursor)
+	w.Header().Add(HeaderCursor, cursor)
 	w.WriteHeader(status)
 	fmt.Fprintf(w, string(j))
 }
 
 // WriteLogRespErr logs the error string and then writes it to the response
-// header (HEADER_ERROR) before setting the response code.
+// header (HeaderError) before setting the response code.
 func WriteLogRespErr(c context.Context, w http.ResponseWriter, code int, e error) {
 	if e != nil {
 		log.Errorf(c, e.Error())
-		w.Header().Add(HEADER_ERROR, e.Error())
+		w.Header().Add(HeaderError, e.Error())
 	}
 	w.WriteHeader(code)
 }
 
-// WriteRespErr writes the error string to the response header (HEADER_ERROR)
+// WriteRespErr writes the error string to the response header (HeaderError)
 // before setting the response code.
 func WriteRespErr(w http.ResponseWriter, code int, e error) {
 	if e != nil {
-		w.Header().Set(http.CanonicalHeaderKey(HEADER_ERROR), e.Error())
+		w.Header().Set(http.CanonicalHeaderKey(HeaderError), e.Error())
 	}
 	w.WriteHeader(code)
 }

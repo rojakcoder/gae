@@ -215,7 +215,7 @@ type NotFoundError struct {
 //	- Entity not found - <error string>
 //	- '<kind>' entity not found - <error string>
 func (this NotFoundError) Error() string {
-	m := "Entity not found"
+	m := "entity not found"
 	if this.Kind != "" {
 		m = fmt.Sprintf("'%v' entity not found", this.Kind)
 	}
@@ -228,5 +228,23 @@ func (this NotFoundError) Error() string {
 // IsNotFoundError checks if an error is the `NotFoundError` type.
 func IsNotFoundError(e error) bool {
 	_, ok := e.(NotFoundError)
+	return ok
+}
+
+// ValidityError is for errors in model validation.
+type ValidityError struct {
+	Msg string
+}
+
+// Error returns a string in the format:
+//
+//	validation error: <error string>
+func (e ValidityError) Error() string {
+	return "validation error - " + e.Msg
+}
+
+// IsValidityError checks if an error is the `ValidityError` type.
+func IsValidityError(e error) bool {
+	_, ok := e.(ValidityError)
 	return ok
 }
