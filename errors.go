@@ -1,6 +1,18 @@
 package gae
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var (
+	// ErrMultipleEntities is returned when a Datastore retrieval
+	// finds more than 1 entity with the specified criteria.
+	ErrMultipleEntities = errors.New("multiple entities retrieved when only 1 is expected")
+
+	// ErrNilKey is returned when Key parameters are not expected to be nil.
+	ErrNilKey = errors.New("key is nil")
+)
 
 // DuplicateError is for when a duplicate value is present.
 type DuplicateError struct {
