@@ -911,3 +911,104 @@ func TestSession(t *testing.T) {
 		t.Error("expect MakeSessionCookie to return error after Close(); got none")
 	}
 }
+
+func TestErrorResponseEqual(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+
+	e1 := ErrorResponse{}
+	e2 := ErrorResponse{}
+
+	type tc struct {
+		title  string
+		result bool
+		setup  func(context.Context)
+	}
+
+	cases := []tc{
+		{
+			title:  "Both empty",
+			result: true,
+		},
+		{
+			title:  "Only ErrorCode 1",
+			result: false,
+			setup: func(ctx context.Context) {
+				e1.ErrorCode = "EC1"
+			},
+		},
+		{
+			title:  "Only ErrorCode 2",
+			result: true,
+			setup: func(ctx context.Context) {
+				e2.ErrorCode = "EC1"
+			},
+		},
+		{
+			title:  "Only 1 all",
+			result: false,
+			setup: func(ctx context.Context) {
+				e1.Field = "email"
+				e1.HelpURL = "/help"
+				e1.Message = "Email format"
+				e1.OriginalValue = "email"
+			},
+		},
+		{
+			title:  "2 mismatch 3",
+			result: false,
+			setup: func(ctx context.Context) {
+				e2.Field = "email"
+			},
+		},
+		{
+			title:  "2 mismatch 2",
+			result: false,
+			setup: func(ctx context.Context) {
+				e2.HelpURL = "/help"
+			},
+		},
+		{
+			title:  "2 mismatch 1",
+			result: false,
+			setup: func(ctx context.Context) {
+				e2.Message = "Email format"
+			},
+		},
+		{
+			title:  "Match",
+			result: true,
+			setup: func(ctx context.Context) {
+				e2.OriginalValue = "email"
+			},
+		},
+	}
+
+	for _, c := range cases {
+		if c.setup != nil {
+			c.setup(ctx)
+		}
+		if c.result != e1.Equal(e2) {
+			if c.result {
+				t.Errorf("%v: expect instances to be equal", c.title)
+			} else {
+				t.Errorf("%v: expect instances to be NOT equal", c.title)
+			}
+		}
+	}
+	rec := httptest.NewRecorder()
+	WriteErrorResponse(rec, 400, e2)
+	if rec.Code != 400 {
+		t.Errorf("expect error code %d; got %d", 400, rec.Code)
+	}
+	resp := ErrorResponse{}
+	if e := json.Unmarshal(rec.Body.Bytes(), &resp); e != nil {
+		t.Fatal(e)
+	}
+	if !e2.Equal(resp) {
+		t.Errorf("expect WriteErrorResponse to return\n\n%+v; got\n\n%+v", e2, resp)
+	}
+}

@@ -115,6 +115,50 @@ func NewDateTimeNow() DateTime {
 	return DateTime{time.Now()}
 }
 
+// ErrorResponse should be the return payload if the API endpoints return an
+// error response (i.e. error codes in the 4xx and 5xx ranges).
+//
+// All of the fields are optional. If not set, the fields are omitted from the
+// JSON output.
+type ErrorResponse struct {
+	// ErrorCode is a code that identifies the error. E.g. BAD_FORMAT
+	ErrorCode string `json:"errorCode,omitempty"`
+	// Field is the name of the field that has the error.
+	Field string `json:"email,omitempty"`
+	// HelpURL is the URL to the help page that describes the error in more
+	// detail. The page should also help the developers know how to fix the
+	// error, the cause and resolutions.
+	HelpURL string `json:"helpUrl,omitempty"`
+	// Message contains a user-friendly message. It may be used to surface to
+	// the client directly. For localization, some coordination may be
+	// required between the client and server to show the message in the local
+	// language.
+	Message string `json:"message,omitempty"`
+	// OriginalValue contains the original value from the request.
+	OriginalValue string `json:"originalValue,omitempty"`
+}
+
+// Equal checks if two instances of ErrorResponse are equal. They are
+// considered equal if and only if all fields are identical (case-sensitive).
+func (er ErrorResponse) Equal(e ErrorResponse) bool {
+	if er.ErrorCode != e.ErrorCode {
+		return false
+	}
+	if er.Field != e.Field {
+		return false
+	}
+	if er.HelpURL != e.HelpURL {
+		return false
+	}
+	if er.Message != e.Message {
+		return false
+	}
+	if er.OriginalValue != e.OriginalValue {
+		return false
+	}
+	return true
+}
+
 // Page describes the contents for a page. It is to be used with templates.
 type Page struct {
 	Title       string
@@ -431,6 +475,17 @@ func SaveCacheEntity(ctx context.Context, m Datastorer) error {
 		memcache.Set(ctx, item) //ignore any error
 	}
 	return nil
+}
+
+// WriteErrorResponse writes an error response along with a payload that
+// provides more information about the error for the client.
+func WriteErrorResponse(w http.ResponseWriter, code int, er ErrorResponse) {
+	j, e := json.Marshal(er)
+	if e != nil {
+		w.Header().Set(http.CanonicalHeaderKey(HeaderError), e.Error())
+	}
+	w.WriteHeader(code)
+	fmt.Fprintf(w, string(j))
 }
 
 // WriteJSON writes an instance of Datastorer as a JSON string into the response
