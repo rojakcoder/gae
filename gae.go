@@ -124,7 +124,7 @@ type ErrorResponse struct {
 	// ErrorCode is a code that identifies the error. E.g. BAD_FORMAT
 	ErrorCode string `json:"errorCode,omitempty"`
 	// Field is the name of the field that has the error.
-	Field string `json:"email,omitempty"`
+	Field string `json:"field,omitempty"`
 	// HelpURL is the URL to the help page that describes the error in more
 	// detail. The page should also help the developers know how to fix the
 	// error, the cause and resolutions.
