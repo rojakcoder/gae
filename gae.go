@@ -4,7 +4,6 @@ package gae
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,11 +27,6 @@ const (
 	// KindSession is the kind of entity stored in the Datastore for
 	// maintaining session.
 	KindSession = "GAESession"
-)
-
-var (
-	// ErrUnauth is returned when the request is not authenticated.
-	ErrUnauth = errors.New("unauthenticated")
 )
 
 // DateTime is an auxillary struct for time.Time specifically for the purpose

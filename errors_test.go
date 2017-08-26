@@ -84,4 +84,13 @@ func TestErrors2(t *testing.T) {
 	if !IsValidityError(eh2) {
 		t.Errorf("expect IsValidityError to return true; got false")
 	}
+
+	ei1 := TypeError{}
+	runtest(t, "TypeError.Error - basic", "type error", ei1.Error())
+	ei2 := TypeError{Name: "name"}
+	runtest(t, "TypeError.Error - with name", "type error on 'name'", ei2.Error())
+	ei3 := TypeError{Cause: "conversion failed"}
+	runtest(t, "TypeError.Error - with cause", "type error - conversion failed", ei3.Error())
+	ei4 := TypeError{Name: "name", Cause: "conversion failed"}
+	runtest(t, "TypeError.Error - with name and cause", "type error on 'name' - conversion failed", ei4.Error())
 }

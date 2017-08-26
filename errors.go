@@ -12,6 +12,9 @@ var (
 
 	// ErrNilKey is returned when Key parameters are not expected to be nil.
 	ErrNilKey = errors.New("key is nil")
+
+	// ErrUnauth is returned when the request is not authenticated.
+	ErrUnauth = errors.New("unauthenticated")
 )
 
 // DuplicateError is for when a duplicate value is present.
@@ -240,6 +243,42 @@ func (this NotFoundError) Error() string {
 // IsNotFoundError checks if an error is the `NotFoundError` type.
 func IsNotFoundError(e error) bool {
 	_, ok := e.(NotFoundError)
+	return ok
+}
+
+// TypeError is for errors having to do with types and conversion.
+type TypeError struct {
+	Name  string
+	Cause string
+}
+
+// Error returns a string in different formats depending on the properties
+// specified.
+//
+// Basic (nothing specified): "type error"
+//
+// Name specified only: "type error on <name>
+//
+// Cause specified only: "type error - <cause>"
+//
+// Name and Cause specified: "type error on <name> - <cause>"
+func (e TypeError) Error() string {
+	m := "type error"
+	if e.Name != "" {
+		m += " on '%v'"
+	}
+	if e.Cause != "" {
+		m += " - " + e.Cause
+	}
+	if e.Name != "" {
+		return fmt.Sprintf(m, e.Name)
+	}
+	return m
+}
+
+// IsTypeError checks if an error is the "TypeError" type.
+func IsTypeError(e error) bool {
+	_, ok := e.(TypeError)
 	return ok
 }
 
