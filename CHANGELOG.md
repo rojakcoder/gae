@@ -1,5 +1,16 @@
 # Change Log
 
+## [0.17.0] - 2017-09-19
+
+### Added
+- Added functions to make sharded counters.
+- Added test to make errors.go 100% code coverage.
+
+### Changed
+- Fixed the problem where responses were being returned as text when JSON was
+expected.
+- Modified ErrorResponse to implement the error interface.
+
 ## [0.16.0] - 2017-05-24
 
 ### Changed
