@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -24,10 +25,169 @@ const (
 	// lower-case because it is following the specifications and App Engine
 	// changes it to all lowercase no matter the original casing.
 	HeaderError = "x-error"
+	// KindCounterConfig is the entity kind for storing the sharded counter
+	// configuration.
+	KindCounterConfig = "GAECounterConfig"
+	// KindCounterShard is the entity kind for storing a shard of the counter.
+	KindCounterShard = "GAECounterShard"
 	// KindSession is the kind of entity stored in the Datastore for
 	// maintaining session.
 	KindSession = "GAESession"
+	// The default number of shards if not specified.
+	defaultShards = 5
 )
+
+// INTERFACE definitions
+
+// Datastorer is an interface that all application models must implement
+// in order to be able to save to and load from the Datastore.
+//
+// The MakeKey method is for getting the Key of the entity (if present) or
+// make a new one for saving (if absent).
+//
+// SetKey is used to assign values to other properties that are not stored as
+// values of the entity, but as either the string/numeric ID or the parent of
+// the Key.
+//
+// ValidationError returns a slice of string with the fields that do not meet
+// the validation rules. This is used by IsValid to determine the validity of
+// the model.
+type Datastorer interface {
+	Key() *datastore.Key
+	MakeKey(context.Context) *datastore.Key
+	SetKey(*datastore.Key) error
+	ValidationError() []string
+}
+
+// Presaver specifies a method Presave with no return values.
+//
+// Data models that require some "cleanup" before saving into the Datastore
+// should implement this method to do the cleanup.
+//
+// Presave is called after IsValid.
+type Presaver interface {
+	Presave()
+}
+
+// Counter definitions
+
+// counterConfig stores the number of shards.
+type counterConfig struct {
+	Shards int `datastore:",noindex"`
+}
+
+// counterShard stores a shard of the named counter.
+type counterShard struct {
+	Name  string
+	Count int `datastore:",noindex"`
+}
+
+// counterMemcacheKey creates the key for the memcache object storing the
+// counter by prefixing the name with the constant `KindCounterShard` and ":".
+func counterMemcacheKey(name string) string {
+	return KindCounterShard + ":" + name
+}
+
+// CounterCount gets the value of the counter by summing up the values of all
+// the sharded counters.
+//
+// If the counter exists in memcache, it is returned without touching the
+// Datastore.
+func CounterCount(ctx context.Context, name string) (int, error) {
+	total := 0
+	mkey := counterMemcacheKey(name)
+	if _, err := memcache.JSON.Get(ctx, mkey, &total); err == nil {
+		return total, nil
+	}
+	q := datastore.NewQuery(KindCounterShard).Filter("Name =", name)
+	for it := q.Run(ctx); ; {
+		var s counterShard
+		_, err := it.Next(&s)
+		if err == datastore.Done {
+			break
+		}
+		if err != nil {
+			return total, err
+		}
+		total += s.Count
+	}
+	memcache.JSON.Set(ctx, &memcache.Item{
+		Key:        mkey,
+		Object:     &total,
+		Expiration: 60,
+	})
+	return total, nil
+}
+
+// CounterIncrement increments the named counter.
+//
+// This function increases by 1 the value of a randomly selected shard, and
+// also that of the counter in memcache.
+func CounterIncrement(ctx context.Context, name string) error {
+	var cfg counterConfig
+	ckey := datastore.NewKey(ctx, KindCounterConfig, name, 0, nil)
+	err := datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		err := datastore.Get(ctx, ckey, &cfg)
+		if err == datastore.ErrNoSuchEntity {
+			cfg.Shards = defaultShards
+			_, err = datastore.Put(ctx, ckey, &cfg)
+		}
+		return err
+	}, nil)
+	if err != nil {
+		return err
+	}
+	var s counterShard
+	err = datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		shardName := fmt.Sprintf("%v-shard%d", name, rand.Intn(cfg.Shards))
+		key := datastore.NewKey(ctx, KindCounterShard, shardName, 0, nil)
+		err := datastore.Get(ctx, key, &s)
+		if err != nil && err != datastore.ErrNoSuchEntity { //fine if not found
+			return err
+		}
+		s.Name = name
+		s.Count++
+		_, err = datastore.Put(ctx, key, &s)
+		return err
+	}, nil)
+	if err != nil {
+		return err
+	}
+	memcache.IncrementExisting(ctx, counterMemcacheKey(name), 1) //ignore cache miss error
+	return nil
+}
+
+// CounterIncreaseShards increases the number of shards for the named counter.
+//
+// The entity is only saved to the Datastore if it differs. The number of
+// shards can only increase and cannot be decreased.
+//
+// n is the total number of shards that can exist, not the number of shards to
+// increase by.
+func CounterIncreaseShards(ctx context.Context, name string, n int) error {
+	ckey := datastore.NewKey(ctx, KindCounterConfig, name, 0, nil)
+	return datastore.RunInTransaction(ctx, func(ctx context.Context) error {
+		var cfg counterConfig
+		changed := false
+		err := datastore.Get(ctx, ckey, &cfg)
+		if err == datastore.ErrNoSuchEntity {
+			cfg.Shards = defaultShards
+			changed = true
+		} else if err != nil {
+			return err
+		}
+		if cfg.Shards < n {
+			cfg.Shards = n
+			changed = true
+		}
+		if changed {
+			_, err = datastore.Put(ctx, ckey, &cfg)
+		}
+		return err
+	}, nil)
+}
+
+// DateTime definitions
 
 // DateTime is an auxillary struct for time.Time specifically for the purpose
 // of converting to RFC3339 time format in JSON.
@@ -109,6 +269,8 @@ func NewDateTimeNow() DateTime {
 	return DateTime{time.Now()}
 }
 
+// ErrorResponse definitions
+
 // ErrorResponse should be the return payload if the API endpoints return an
 // error response (i.e. error codes in the 4xx and 5xx ranges).
 //
@@ -153,6 +315,42 @@ func (er ErrorResponse) Equal(e ErrorResponse) bool {
 	return true
 }
 
+// Error returns
+//
+//	<Message> (<ErrorCode>) - <Field>(<OriginalValue>)
+//
+// If the "ErrorCode" is empty, the parentheses around it will not be included.
+//
+// The same applies for "OriginalValue".
+func (er ErrorResponse) Error() string {
+	var buf bytes.Buffer
+	if er.Message != "" {
+		buf.WriteString(er.Message)
+	}
+	if er.ErrorCode != "" {
+		if buf.Len() > 0 {
+			buf.WriteString(" ")
+		}
+		buf.WriteString("(")
+		buf.WriteString(er.ErrorCode)
+		buf.WriteString(")")
+	}
+	if buf.Len() > 0 && (er.Field != "" || er.OriginalValue != "") {
+		buf.WriteString(" - ")
+	}
+	if er.Field != "" {
+		buf.WriteString(er.Field)
+	}
+	if er.OriginalValue != "" {
+		buf.WriteString("(")
+		buf.WriteString(er.OriginalValue)
+		buf.WriteString(")")
+	}
+	return buf.String()
+}
+
+// Page definitions
+
 // Page describes the contents for a page. It is to be used with templates.
 type Page struct {
 	Title       string
@@ -195,35 +393,7 @@ func (p *Page) ToDictionary() map[string]interface{} {
 	return dict
 }
 
-// Datastorer is an interface that all application models must implement
-// in order to be able to save to and load from the Datastore.
-//
-// The MakeKey method is for getting the Key of the entity (if present) or
-// make a new one for saving (if absent).
-//
-// SetKey is used to assign values to other properties that are not stored as
-// values of the entity, but as either the string/numeric ID or the parent of
-// the Key.
-//
-// ValidationError returns a slice of string with the fields that do not meet
-// the validation rules. This is used by IsValid to determine the validity of
-// the model.
-type Datastorer interface {
-	Key() *datastore.Key
-	MakeKey(context.Context) *datastore.Key
-	SetKey(*datastore.Key) error
-	ValidationError() []string
-}
-
-// Presaver specifies a method Presave with no return values.
-//
-// Data models that require some "cleanup" before saving into the Datastore
-// should implement this method to do the cleanup.
-//
-// Presave is called after IsValid.
-type Presaver interface {
-	Presave()
-}
+// Session definitions
 
 // Session keeps track of a user's session information.
 //
@@ -319,6 +489,8 @@ func MakeSessionCookie(ctx context.Context, name string, obj interface{},
 		Expires: exp,
 	}, nil
 }
+
+// FUNCTION definitions
 
 // DeleteByID removes an entity from the Datastore using the opaque
 // representation of the key.
@@ -478,6 +650,7 @@ func WriteErrorResponse(w http.ResponseWriter, code int, er ErrorResponse) {
 	if e != nil {
 		w.Header().Set(http.CanonicalHeaderKey(HeaderError), e.Error())
 	}
+	w.Header().Set(http.CanonicalHeaderKey("Content-Type"), "application/json")
 	w.WriteHeader(code)
 	fmt.Fprintf(w, string(j))
 }
@@ -493,6 +666,7 @@ func WriteJSON(w http.ResponseWriter, m Datastorer, status int) {
 		WriteRespErr(w, http.StatusInternalServerError, e)
 		return
 	}
+	w.Header().Set(http.CanonicalHeaderKey("Content-Type"), "application/json")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, string(j))
 }
@@ -517,7 +691,8 @@ func WriteJSONColl(w http.ResponseWriter, m []Datastorer, status int, cursor str
 		WriteRespErr(w, http.StatusInternalServerError, e)
 		return
 	}
-	w.Header().Add(HeaderCursor, cursor)
+	w.Header().Add(http.CanonicalHeaderKey(HeaderCursor), cursor)
+	w.Header().Set(http.CanonicalHeaderKey("Content-Type"), "application/json")
 	w.WriteHeader(status)
 	fmt.Fprintf(w, string(j))
 }
@@ -527,7 +702,7 @@ func WriteJSONColl(w http.ResponseWriter, m []Datastorer, status int, cursor str
 func WriteLogRespErr(c context.Context, w http.ResponseWriter, code int, e error) {
 	if e != nil {
 		log.Errorf(c, e.Error())
-		w.Header().Add(HeaderError, e.Error())
+		w.Header().Add(http.CanonicalHeaderKey(HeaderError), e.Error())
 	}
 	w.WriteHeader(code)
 }

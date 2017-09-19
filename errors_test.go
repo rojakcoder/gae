@@ -93,4 +93,7 @@ func TestErrors2(t *testing.T) {
 	runtest(t, "TypeError.Error - with cause", "type error - conversion failed", ei3.Error())
 	ei4 := TypeError{Name: "name", Cause: "conversion failed"}
 	runtest(t, "TypeError.Error - with name and cause", "type error on 'name' - conversion failed", ei4.Error())
+	if !IsTypeError(ei2) {
+		t.Error("expect IsTypeError to return true; got false")
+	}
 }

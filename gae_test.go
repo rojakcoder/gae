@@ -496,6 +496,49 @@ func TestCoverage(t *testing.T) {
 	}
 }
 
+func TestCoverageCounter(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mkey := counterMemcacheKey("c1")
+	err = memcache.JSON.Set(ctx, &memcache.Item{
+		Key:    mkey,
+		Object: 33,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := CounterCount(ctx, "c1")
+	if err != nil {
+		t.Error("failed to cover CounterCount; got error %v", err)
+	}
+	if n != 33 {
+		t.Error("expect memcache to hold value 33; got %d", n)
+	}
+
+	done()
+
+	n, err = CounterCount(ctx, "c1")
+	if err == nil {
+		t.Error("failed to cover CounterCount")
+	}
+	if n != 0 {
+		t.Errorf("expect 0 for error; got %d", n)
+	}
+
+	err = CounterIncrement(ctx, "c1")
+	if err == nil {
+		t.Error("failed to cover CounterIncrement")
+	}
+
+	err = CounterIncreaseShards(ctx, "c1", 10)
+	if err == nil {
+		t.Error("failed to cover CounterIncreaseShards")
+	}
+}
+
 func TestErrors(t *testing.T) {
 	//cover EntityNotFoundError
 	enfeTests := []struct {
@@ -1010,5 +1053,257 @@ func TestErrorResponseEqual(t *testing.T) {
 	}
 	if !e2.Equal(resp) {
 		t.Errorf("expect WriteErrorResponse to return\n\n%+v; got\n\n%+v", e2, resp)
+	}
+}
+
+func TestErrorResponseError(t *testing.T) {
+	ec := "SESSION_ERROR"
+	field := "userID"
+	msg := "user not authorized"
+	value := "guest"
+
+	cases := []struct {
+		output string
+		er     ErrorResponse
+	}{
+		{
+			output: "user not authorized (SESSION_ERROR) - userID(guest)",
+			er: ErrorResponse{
+				ErrorCode:     ec,
+				Field:         field,
+				Message:       msg,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "user not authorized - userID(guest)",
+			er: ErrorResponse{
+				Field:         field,
+				Message:       msg,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "user not authorized (SESSION_ERROR) - (guest)",
+			er: ErrorResponse{
+				ErrorCode:     ec,
+				Message:       msg,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "(SESSION_ERROR) - userID(guest)",
+			er: ErrorResponse{
+				ErrorCode:     ec,
+				Field:         field,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "user not authorized (SESSION_ERROR) - userID",
+			er: ErrorResponse{
+				ErrorCode: ec,
+				Field:     field,
+				Message:   msg,
+			},
+		},
+		{
+			output: "user not authorized - (guest)",
+			er: ErrorResponse{
+				Message:       msg,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "userID(guest)",
+			er: ErrorResponse{
+				Field:         field,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "user not authorized - userID",
+			er: ErrorResponse{
+				Field:   field,
+				Message: msg,
+			},
+		},
+		{
+			output: "(SESSION_ERROR) - (guest)",
+			er: ErrorResponse{
+				ErrorCode:     ec,
+				OriginalValue: value,
+			},
+		},
+		{
+			output: "user not authorized (SESSION_ERROR)",
+			er: ErrorResponse{
+				ErrorCode: ec,
+				Message:   msg,
+			},
+		},
+		{
+			output: "(SESSION_ERROR) - userID",
+			er: ErrorResponse{
+				ErrorCode: ec,
+				Field:     field,
+			},
+		},
+		{
+			output: "(SESSION_ERROR)",
+			er: ErrorResponse{
+				ErrorCode: ec,
+			},
+		},
+		{
+			output: "userID",
+			er: ErrorResponse{
+				Field: field,
+			},
+		},
+		{
+			output: "user not authorized",
+			er: ErrorResponse{
+				Message: msg,
+			},
+		},
+		{
+			output: "(guest)",
+			er: ErrorResponse{
+				OriginalValue: value,
+			},
+		},
+	}
+
+	for _, c := range cases {
+		if c.output != c.er.Error() {
+			t.Errorf("expect error string\n\t%v; got\n\t%v",
+				c.output, c.er.Error())
+		}
+	}
+}
+
+func TestCounterCount(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+
+	cases := []struct {
+		title     string
+		name      string
+		increase  int
+		delay     int
+		wantCount int
+		wantErr   bool
+	}{
+		{
+			title:     "Starting 0",
+			name:      "instances",
+			wantCount: 0,
+		},
+		{
+			title:     "Adding 1 - still 0 because of eventual consistency",
+			name:      "instances",
+			increase:  1,
+			wantCount: 0,
+		},
+		{
+			title:     "Check for 1 again",
+			name:      "instances",
+			delay:     2,
+			wantCount: 1,
+		},
+		{
+			title:     "Adding 11",
+			name:      "instances",
+			increase:  11,
+			delay:     6,
+			wantCount: 12,
+		},
+	}
+
+	for _, c := range cases {
+		if c.increase > 0 {
+			for i := 0; i < c.increase; i++ {
+				go func() {
+					if e := CounterIncrement(ctx, c.name); e != nil {
+						t.Fatal(e)
+					}
+				}()
+			}
+		}
+		if c.delay > 0 {
+			time.Sleep(time.Second * time.Duration(c.delay))
+		}
+		num, err := CounterCount(ctx, c.name)
+		if c.wantErr && err == nil {
+			t.Errorf("%v: expect error; got nil", c.title)
+		}
+		if !c.wantErr && err != nil {
+			t.Fatal(err)
+		}
+		if c.wantCount != num {
+			t.Errorf("%v: expect counter to be %d; got %d",
+				c.title, c.wantCount, num)
+		}
+	}
+}
+
+func TestCounterShard(t *testing.T) {
+	ctx, done, err := aetest.NewContext()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer done()
+
+	cases := []struct {
+		title     string
+		name      string
+		num       int
+		wantCount int
+	}{
+		{
+			title:     "Start with 20",
+			name:      "kounter",
+			num:       20,
+			wantCount: 20,
+		},
+		{
+			title:     "No increase when numbers same",
+			name:      "kounter",
+			num:       20,
+			wantCount: 20,
+		},
+		{
+			title:     "Increase to 25",
+			name:      "kounter",
+			num:       25,
+			wantCount: 25,
+		},
+		{
+			title:     "Start with 1",
+			name:      "kounter1",
+			num:       1,
+			wantCount: 5,
+		},
+	}
+
+	for _, c := range cases {
+		if c.num > 0 {
+			if e := CounterIncreaseShards(ctx, c.name, c.num); e != nil {
+				t.Fatal(e)
+			}
+		}
+		var config counterConfig
+		ckey := datastore.NewKey(ctx, KindCounterConfig, c.name, 0, nil)
+		if e := datastore.Get(ctx, ckey, &config); e != nil {
+			t.Fatal(e)
+		}
+		if c.wantCount != config.Shards {
+			t.Errorf("%v: expect number of shards to be %d; got %d",
+				c.title, c.wantCount, config.Shards)
+		}
 	}
 }
