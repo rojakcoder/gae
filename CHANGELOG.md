@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.18.0] - 2017-10-22
+
+### Changed
+- Modified DeleteByKey() (by extension DeleteByID() as well) to also remove
+the entity from memcache in addition to the Datastore.
+
 ## [0.17.0] - 2017-09-19
 
 ### Added
