@@ -492,7 +492,7 @@ func MakeSessionCookie(ctx context.Context, name string, obj interface{},
 
 // FUNCTION definitions
 
-// DeleteByID removes an entity from the Datastore using the opaque
+// DeleteByID removes an entity from the Datastore and memcache using the opaque
 // representation of the key.
 //
 // DeleteByKey is called after conversion of the ID.
@@ -506,10 +506,13 @@ func DeleteByID(ctx context.Context, id string) error {
 
 // DeleteByKey removes an entity from the Datastore.
 //
-// This is just an alias to:
+// In addition to being an alias to:
 //
 //	datastore.Delete(ctx, k)
+//
+// this function also removes the item from memcache.
 func DeleteByKey(ctx context.Context, k *datastore.Key) error {
+	memcache.Delete(ctx, k.Encode()) //ignore any error
 	return datastore.Delete(ctx, k)
 }
 

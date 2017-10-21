@@ -655,23 +655,19 @@ func TestSaveRetrieveEntity(t *testing.T) {
 	test("expect Batch value %v; got %v", m0.Batch, m2.Batch)
 	test("expect Name value %v; got %v", m0.Name, m2.Name)
 
-	//delete the entity from DB to test cache hit
+	//delete the entity from DB to test cache miss
 	if err := DeleteByKey(ctx, k1); err != nil {
 		t.Fatal("error deleting from DB", err)
 	}
 	m3 := &Ointment{}
-	if err := RetrieveEntityByKey(ctx, k1, m3); err != nil {
-		t.Error("expect RetrieveEntityByKey to get a cache hit even if entity is deleted; got error", err)
+	if err := RetrieveEntityByKey(ctx, k1, m3); err == nil {
+		t.Error("expect RetrieveEntityByKey to get a cache miss when entity is deleted; got nil error")
 	}
-	test("expect Batch value %v; got %v", m0.Batch, m3.Batch)
-	test("expect Name value %v; got %v", m0.Name, m3.Name)
+	test("expect Batch value %v; got %v", 0, m3.Batch)
+	test("expect Name value %v; got %v", "", m3.Name)
 
-	//empty the cache and test cache miss
-	if err := memcache.Delete(ctx, k1.Encode()); err != nil {
-		t.Error("memcache.Delete returned an error when none was expected:", err)
-	}
 	if err := memcache.Delete(ctx, k1.Encode()); err != memcache.ErrCacheMiss {
-		t.Error("expect memcache.Delete to return ErrCacheMiss due to removal of key")
+		t.Error("expect memcache.Delete to return ErrCacheMiss as a result of DeleteByKey")
 	}
 	//retrieval should now give error
 	m4 := &Ointment{}
