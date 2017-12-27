@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.19.0] - 2017-12-27
+
+### Changed
+- Added GCStorage to work with the Google Cloud Storage service.
+
 ## [0.18.0] - 2017-10-22
 
 ### Changed
