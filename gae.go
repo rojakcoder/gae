@@ -357,6 +357,7 @@ type Page struct {
 	Description string
 	Dictionary  map[string]string
 	Path        string
+	Public      bool
 	Param       map[string]string
 	Handler     func(http.ResponseWriter, *http.Request)
 	Template    string
